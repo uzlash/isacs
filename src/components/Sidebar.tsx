@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { NAV, viewIdForPath } from "./nav";
@@ -34,30 +35,14 @@ export default function Sidebar() {
           gap: 11,
         }}
       >
-        <div
-          style={{
-            width: 32,
-            height: 32,
-            border: "1.5px solid var(--accent)",
-            borderRadius: 7,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            position: "relative",
-          }}
-        >
-          <div style={{ width: 13, height: 13, border: "1.5px solid var(--accent)", borderRadius: 3 }} />
-          <div
-            style={{
-              position: "absolute",
-              width: 5,
-              height: 5,
-              background: "var(--accent)",
-              borderRadius: "50%",
-              animation: "isacs-pulse 2.4s infinite",
-            }}
-          />
-        </div>
+        <Image
+          src="/Nigerian_Air_Force_emblem.svg.png"
+          alt="Nigerian Air Force"
+          width={37}
+          height={38}
+          priority
+          style={{ flex: "0 0 auto", objectFit: "contain" }}
+        />
         <div>
           <div style={{ font: "700 15px var(--font-sans-stack)", letterSpacing: "1.5px", color: "var(--fg)" }}>
             ISACS
@@ -66,7 +51,7 @@ export default function Sidebar() {
             className="mono"
             style={{ font: "500 8.5px var(--font-mono-stack)", letterSpacing: "1px", color: "var(--faint)", marginTop: 1 }}
           >
-            SECURITY CONTROL
+            NIGERIAN AIR FORCE
           </div>
         </div>
       </div>

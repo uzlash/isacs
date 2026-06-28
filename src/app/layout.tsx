@@ -19,7 +19,7 @@ const plexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ISACS — Security Control",
+  title: "ISACS — Nigerian Air Force",
   description: "Integrated Security Access Control System · Operator Console",
 };
 
