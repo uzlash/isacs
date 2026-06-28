@@ -1,49 +1,358 @@
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/* ====================================================================
+   ISACS Operator Console — design tokens, themes, base styles
+   Fonts are provided by next/font as --font-sans / --font-mono.
+   ==================================================================== */
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
-html {
-  height: 100%;
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
 }
 
 html,
 body {
-  max-width: 100vw;
-  overflow-x: hidden;
+  margin: 0;
+  padding: 0;
+}
+
+/* ---------- THEME TOKENS ----------
+   Obsidian (dark) is the default — applied on :root and on
+   [data-theme="obsidian"]. Daylight and Steel override the set. */
+:root,
+[data-theme="obsidian"] {
+  --bg: #0a0e14;
+  --panel: #0f141d;
+  --panel2: #151c28;
+  --panel3: #1b2433;
+  --border: #202a39;
+  --border2: #2b384a;
+  --fg: #e6edf3;
+  --muted: #8a97a8;
+  --faint: #566578;
+  --accent: #34d3c0;
+  --ok: #3fb950;
+  --warn: #e3a008;
+  --danger: #f85149;
+  --info: #58a6ff;
+  --grid: rgba(255, 255, 255, 0.028);
+  --sw: #34d3c0;
+}
+
+[data-theme="daylight"] {
+  --bg: #eceff4;
+  --panel: #ffffff;
+  --panel2: #f5f7fb;
+  --panel3: #eaeef4;
+  --border: #dde3ec;
+  --border2: #c8d2e0;
+  --fg: #16202c;
+  --muted: #586472;
+  --faint: #93a0b1;
+  --accent: #0d9488;
+  --ok: #1a7f37;
+  --warn: #b87503;
+  --danger: #cf222e;
+  --info: #0969da;
+  --grid: rgba(20, 30, 45, 0.04);
+  --sw: #0d9488;
+}
+
+[data-theme="steel"] {
+  --bg: #13161a;
+  --panel: #191d23;
+  --panel2: #20252d;
+  --panel3: #272d37;
+  --border: #2c333d;
+  --border2: #3a424e;
+  --fg: #dfe3e8;
+  --muted: #909aa6;
+  --faint: #5e6976;
+  --accent: #c9a227;
+  --ok: #6a9b4e;
+  --warn: #d08a1d;
+  --danger: #c8503f;
+  --info: #5b8bb0;
+  --grid: rgba(255, 255, 255, 0.022);
+  --sw: #c9a227;
+}
+
+/* ---------- DENSITY ----------
+   Scales the view padding and table-row padding. Balanced is default. */
+:root,
+[data-density="balanced"] {
+  --view-pad: 22px;
+  --row-pad-y: 11px;
+}
+[data-density="compact"] {
+  --view-pad: 14px;
+  --row-pad-y: 8px;
+}
+[data-density="spacious"] {
+  --view-pad: 30px;
+  --row-pad-y: 15px;
+}
+
+/* ---------- FONTS ---------- */
+:root {
+  --font-sans-stack: var(--font-sans), system-ui, sans-serif;
+  --font-mono-stack: var(--font-mono), ui-monospace, monospace;
 }
 
 body {
-  min-height: 100%;
-  display: flex;
-  flex-direction: column;
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans-stack);
+  background: var(--bg);
+  color: var(--fg);
   -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
 }
 
-* {
-  box-sizing: border-box;
-  padding: 0;
-  margin: 0;
+.mono {
+  font-family: var(--font-mono-stack);
+}
+
+/* ---------- SCROLLBARS ---------- */
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border2);
+  border-radius: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ---------- KEYFRAMES ---------- */
+@keyframes isacs-pulse {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(0.82);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes isacs-ring {
+  0% {
+    box-shadow: 0 0 0 0 var(--accent);
+  }
+  70% {
+    box-shadow: 0 0 0 6px transparent;
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+@keyframes isacs-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes isacs-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+
+.pulse {
+  animation: isacs-pulse 2.2s infinite;
+}
+.anim-in {
+  animation: isacs-in 0.4s ease;
+}
+
+/* ====================================================================
+   COMPONENT PRIMITIVES
+   ==================================================================== */
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 11px;
+}
+
+.panel-hd {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.panel-title {
+  font: 600 11px var(--font-mono-stack);
+  letter-spacing: 1.2px;
+  color: var(--fg);
+}
+
+.panel-sub {
+  font: 500 9.5px var(--font-mono-stack);
+  color: var(--faint);
+}
+
+/* section / field micro labels */
+.label {
+  font: 600 9px var(--font-mono-stack);
+  letter-spacing: 0.8px;
+  color: var(--faint);
+  text-transform: uppercase;
+}
+.field-label {
+  font: 600 8.5px var(--font-mono-stack);
+  letter-spacing: 0.6px;
+  color: var(--faint);
+  text-transform: uppercase;
+}
+
+/* table header */
+.thead {
+  border-bottom: 1px solid var(--border);
+  font: 600 9px var(--font-mono-stack);
+  letter-spacing: 0.7px;
+  color: var(--faint);
+  text-transform: uppercase;
+}
+
+.trow {
+  border-bottom: 1px solid var(--border);
+}
+
+.row-hover {
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.row-hover:hover {
+  background: var(--panel2);
+}
+
+/* buttons */
+.btn {
+  border: 1px solid var(--border2);
+  background: transparent;
+  color: var(--muted);
+  border-radius: 7px;
+  cursor: pointer;
+  font-family: var(--font-mono-stack);
+  transition: background 0.12s, color 0.12s;
+}
+.btn:hover {
+  background: var(--panel2);
+  color: var(--fg);
+}
+.btn-accent {
+  border: none;
+  background: var(--accent);
+  color: #04120f;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: var(--font-mono-stack);
+}
+.btn-accent:hover {
+  filter: brightness(1.06);
+}
+
+/* inputs */
+.input,
+.select,
+.textarea {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--fg);
+  outline: none;
+  font: 500 12px var(--font-sans-stack);
+}
+.input,
+.select {
+  height: 38px;
+  padding: 0 10px;
+}
+.textarea {
+  padding: 10px;
+  resize: vertical;
+}
+.input:focus,
+.select:focus,
+.textarea:focus {
+  border-color: var(--border2);
+}
+.input::placeholder,
+.textarea::placeholder {
+  color: var(--faint);
+}
+
+/* status / type pills (color supplied inline) */
+.pill {
+  font: 600 9px var(--font-mono-stack);
+  padding: 2px 8px;
+  border-radius: 5px;
+  white-space: nowrap;
+}
+.sev-pill {
+  font: 600 8.5px var(--font-mono-stack);
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+/* nav item */
+.nav-item {
+  position: relative;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 9px 11px 9px 13px;
+  margin-bottom: 2px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  background: transparent;
+  color: var(--muted);
+  text-decoration: none;
+  transition: background 0.12s, color 0.12s;
+}
+.nav-item:hover {
+  background: var(--panel2);
+}
+.nav-item.active {
+  background: var(--panel2);
+  color: var(--fg);
 }
 
 a {
   color: inherit;
-  text-decoration: none;
 }
 
-@media (prefers-color-scheme: dark) {
-  html {
-    color-scheme: dark;
-  }
+/* main content grid background */
+.view-main {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--view-pad);
+  background: var(--bg);
+  background-image: linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 34px 34px;
+}
+
+.view-wrap {
+  max-width: 1500px;
+  margin: 0 auto;
 }

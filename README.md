@@ -1,36 +1,87 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ISACS — Operator Console
 
-## Getting Started
+A role-aware web console for **ISACS** (Integrated Security Access Control System): a
+real-time Command Center plus nine functional modules (ASRS incidents, surveillance,
+access control, assets, visitors, appointments, staff, users/roles, system rules).
 
-First, run the development server:
+Recreated in Next.js from the design handoff in
+`../design_handoff_isacs_console/` (see its `README.md` for the full spec). This build
+covers the **Super Administrator** experience.
+
+## Stack
+
+- **Next.js 16** (App Router) + **React 19** + **TypeScript**
+- **Zustand** for the cross-module client store
+- **lucide-react** icons, **IBM Plex Sans/Mono** via `next/font`
+- Plain CSS + CSS custom properties for the token-driven, themeable design
+
+## Getting started
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm run dev     # dev server at http://localhost:3000
+npm run build   # production build (also type-checks + lints)
+npm start       # serve the production build
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Project layout
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```
+src/
+  app/
+    layout.tsx          Root layout: fonts, no-flash theme script, providers, shell
+    page.tsx            Command Center (dashboard)
+    incidents/ …        One route per module view (ASRS, surveillance, access, …)
+    globals.css         Design tokens, 3 themes, density, keyframes, primitives
+  components/
+    ClientRoot.tsx      Client bootstrap: hydrate store, apply/persist theme, timers
+    AppShell.tsx        Sidebar + Topbar + ready-gated <main>
+    Sidebar / Topbar    Persistent chrome (nav, clock, theme switcher, alert bell)
+    FacilityMap.tsx     Schematic floor-plan placeholder (replace with a real map layer)
+    ui.tsx, nav.ts      Shared pills/headers + nav config
+  lib/
+    types.ts            Domain types (mirror the REST resources)
+    seed.ts             In-memory seed data (ported from the prototype)
+    store.ts            Zustand store + all cross-module actions
+    format.ts           Tone maps, relative time, role/permission tables
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Design system
 
-## Learn More
+Three built-in themes (**Obsidian** default, **Daylight**, **Steel**) switch from the
+topbar; the accent is independently overridable and density (compact/balanced/spacious)
+scales padding. All are CSS variables on `<html>` (`data-theme`, `data-density`,
+`--accent`), persisted to `localStorage` and applied pre-paint by an inline script to
+avoid a flash. Tokens, type scale, and spacing follow the handoff exactly.
 
-To learn more about Next.js, take a look at the following resources:
+## Cross-module behavior (the live demo)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+State lives in one Zustand store, so a single action propagates everywhere the brief
+requires — without a page reload (sidebar/topbar persist across `<Link>` navigations):
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- **3-strike access failure** at a checkpoint → auto-creates a critical ASRS incident,
+  emits ACCESS + ASRS events to the bus, and bumps the sidebar badge + topbar alert bell.
+- **Camera escalation** → incident with the last snapshot attached.
+- **Asset protocol breach** → high-severity incident. Interlock: a protocol can't be
+  activated without an assigned GPS tracker.
+- **Incident lifecycle** Open → Investigating → Resolved is enforced; resolved records
+  are immutable.
+- **Appointment scheduling** validates duration vs. the facility max and refuses host
+  double-booking.
+- The **live event bus** auto-appends a plausible event every ~3.8s (toggleable).
 
-## Deploy on Vercel
+## Wiring to the real API (next phase)
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Data is currently seeded in-memory inside `lib/store.ts` to make the prototype live.
+Each module's reads/writes are the seam for the documented ISACS REST API
+(`../design_handoff_isacs_console/reference/ISACS_API_Reference.pdf`): replace the
+seed reads with `GET` calls and the mutating actions (`runCheck`, `escalateCam`,
+`reportBreach`, `assignIncident`, `resolveIncident`, `checkIn`, `submitSchedule`, …)
+with their corresponding endpoints, and drive the live feed from the RabbitMQ-backed
+event stream (websocket/SSE) instead of the local timer.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Known gaps (from the handoff, intentionally not yet built)
+
+Auth/login screen + session expiry, role-scoped incident visibility for Security
+Personnel, appointment cancel/postpone UI, visitor duplicate-email detection,
+referential-integrity guards, bulk staff import, and purpose-categorized file uploads.
+The facility map is a schematic placeholder to be replaced by a real lat/long-driven layer.
