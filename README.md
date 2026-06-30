@@ -28,22 +28,40 @@ npm start       # serve the production build
 ```
 src/
   app/
-    layout.tsx          Root layout: fonts, no-flash theme script, providers, shell
-    page.tsx            Command Center (dashboard)
-    incidents/ …        One route per module view (ASRS, surveillance, access, …)
+    layout.tsx          Root layout: fonts, no-flash theme script, ClientRoot
     globals.css         Design tokens, 3 themes, density, keyframes, primitives
+    (console)/          Route group for the console (URL-invisible)
+      layout.tsx        Wraps every module view in the AppShell chrome
+      page.tsx          Command Center (dashboard)
+      incidents/ …      One route per module view (ASRS, surveillance, access, …)
+    login/page.tsx      Auth entry point (no shell, always-dark) — /login
+    icon.png            NAF emblem favicon
   components/
     ClientRoot.tsx      Client bootstrap: hydrate store, apply/persist theme, timers
     AppShell.tsx        Sidebar + Topbar + ready-gated <main>
     Sidebar / Topbar    Persistent chrome (nav, clock, theme switcher, alert bell)
     FacilityMap.tsx     Schematic floor-plan placeholder (replace with a real map layer)
     ui.tsx, nav.ts      Shared pills/headers + nav config
+    login/              AuthenticatorPhone + QrMatrix (login-only)
   lib/
     types.ts            Domain types (mirror the REST resources)
     seed.ts             In-memory seed data (ported from the prototype)
     store.ts            Zustand store + all cross-module actions
     format.ts           Tone maps, relative time, role/permission tables
+    totp.ts             Demo TOTP helpers (login ↔ authenticator agree)
+    config.ts           Data-source toggle + API base URL
 ```
+
+## Login (`/login`)
+
+Credential-first sign-in with mandatory 2FA, ported from the login handoff:
+Credential (RFID / QR) → 6-digit OTP (TOTP primary, SMS fallback) → Success → console.
+It lives outside the `(console)` route group so it renders without the sidebar/topbar,
+and is scoped to the Obsidian dark theme regardless of the console's saved theme. The
+on-screen authenticator phone is a demo aid (the live TOTP it shows is what the login
+expects) — it's the separate mobile app in production and is trivially removable. The
+demo TOTP/credential checks are stand-ins for `POST /auth/login` + `POST /auth/verify-otp`.
+There is **no auth guard yet** — the console is reachable directly until the API is wired.
 
 ## Design system
 
@@ -81,7 +99,9 @@ event stream (websocket/SSE) instead of the local timer.
 
 ## Known gaps (from the handoff, intentionally not yet built)
 
-Auth/login screen + session expiry, role-scoped incident visibility for Security
-Personnel, appointment cancel/postpone UI, visitor duplicate-email detection,
-referential-integrity guards, bulk staff import, and purpose-categorized file uploads.
-The facility map is a schematic placeholder to be replaced by a real lat/long-driven layer.
+The login **screen + flow** is built (demo); real server-side auth, an auth guard on the
+console, session/idle expiry, and instant logout-everywhere come with the API integration.
+Still open: role-scoped incident visibility for Security Personnel, appointment
+cancel/postpone UI, visitor duplicate-email detection, referential-integrity guards, bulk
+staff import, and purpose-categorized file uploads. The facility map is a schematic
+placeholder to be replaced by a real lat/long-driven layer.
