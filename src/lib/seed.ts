@@ -81,16 +81,18 @@ export const seedCards = (): AccessCard[] => [
   { id: "c6", num: "CARD-00236", rfid: "RFID-8846", qr: null, type: "staff", active: false, holder: "— (deactivated)", nodes: [] },
 ];
 
-export const seedCameras = (now: number): Camera[] => [
-  { id: "cam1", name: "CAM-01 Main Gate", loc: "Perimeter South", level: 0, active: true, snap: now - MIN * 2 },
-  { id: "cam2", name: "CAM-02 Bldg A Lobby", loc: "Building A L1", level: 1, active: true, snap: now - MIN * 1 },
-  { id: "cam3", name: "CAM-03 Floor 2 Hall", loc: "Building A L2", level: 2, active: true, snap: now - MIN * 3 },
-  { id: "cam4", name: "CAM-04 Server Room", loc: "Bldg A secure", level: 2, active: true, snap: now - MIN * 1 },
-  { id: "cam5", name: "CAM-05 Vehicle Bay", loc: "Yard East", level: 0, active: true, snap: now - MIN * 4 },
-  { id: "cam6", name: "CAM-06 Bldg B Lobby", loc: "Building B L1", level: 1, active: true, snap: now - MIN * 2 },
-  { id: "cam7", name: "CAM-07 North Fence", loc: "Perimeter North", level: 0, active: false, snap: now - MIN * 240 },
-  { id: "cam8", name: "CAM-08 Comms Room", loc: "Bldg B secure", level: 1, active: true, snap: now - MIN * 1 },
-];
+export const seedCameras = (now: number): Camera[] => (
+  [
+    { id: "cam1", name: "CAM-01 Main Gate", loc: "Perimeter South", level: 0, active: true, snap: now - MIN * 2 },
+    { id: "cam2", name: "CAM-02 Bldg A Lobby", loc: "Building A L1", level: 1, active: true, snap: now - MIN * 1 },
+    { id: "cam3", name: "CAM-03 Floor 2 Hall", loc: "Building A L2", level: 2, active: true, snap: now - MIN * 3 },
+    { id: "cam4", name: "CAM-04 Server Room", loc: "Bldg A secure", level: 2, active: true, snap: now - MIN * 1 },
+    { id: "cam5", name: "CAM-05 Vehicle Bay", loc: "Yard East", level: 0, active: true, snap: now - MIN * 4 },
+    { id: "cam6", name: "CAM-06 Bldg B Lobby", loc: "Building B L1", level: 1, active: true, snap: now - MIN * 2 },
+    { id: "cam7", name: "CAM-07 North Fence", loc: "Perimeter North", level: 0, active: false, snap: now - MIN * 240 },
+    { id: "cam8", name: "CAM-08 Comms Room", loc: "Bldg B secure", level: 1, active: true, snap: now - MIN * 1 },
+  ] as Omit<Camera, "snapUrl" | "lat" | "lng">[]
+).map((c) => ({ ...c, snapUrl: null, lat: null, lng: null }));
 
 export const seedAssets = (): Asset[] => [
   { id: "as1", name: "Patrol Unit 4", type: "Vehicle", vehicle: true, plate: "GOV-4471", tracker: "GPS-A4-009", protoActive: true, speed: 60, geo: true },

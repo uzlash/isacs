@@ -199,6 +199,7 @@ export default function AcmsPage() {
       {modal?.kind === "edit" && (
         <AcmEdit
           acm={modal.acm}
+          nodes={nodes.map((n) => ({ id: n.id, name: n.name, level: n.level }))}
           onClose={() => setModal(null)}
           onSaved={() => {
             setModal(null);
@@ -273,21 +274,28 @@ function AcmForm({ nodes, onClose, onCreated }: { nodes: { id: string; name: str
 }
 
 // ---- edit (name + active) ----
-function AcmEdit({ acm, onClose, onSaved }: { acm: Acm; onClose: () => void; onSaved: () => void }) {
+function AcmEdit({ acm, nodes, onClose, onSaved }: { acm: Acm; nodes: { id: string; name: string; level: number }[]; onClose: () => void; onSaved: () => void }) {
   const [name, setName] = useState(acm.name);
   const [isActive, setIsActive] = useState(acm.isActive);
+  const [nodeId, setNodeId] = useState(acm.nodeId);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
+  const moved = nodeId !== acm.nodeId;
+
   const submit = async () => {
     if (!name.trim()) return setError("Name is required.");
+    if (!nodeId) return setError("Select the access node this device is mounted at.");
     setBusy(true);
     setError("");
     try {
-      await updateAcm(acm.id, { name: name.trim(), isActive });
+      // include nodeId only when it actually changed — if the backend doesn't
+      // support reassignment it 400s, and we surface that clearly.
+      await updateAcm(acm.id, { name: name.trim(), isActive, ...(moved ? { nodeId } : {}) });
       onSaved();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to update device");
+      const msg = e instanceof Error ? e.message : "Failed to update device";
+      setError(moved ? `${msg} — this deployment may not support moving a device between nodes.` : msg);
     } finally {
       setBusy(false);
     }
@@ -297,6 +305,20 @@ function AcmEdit({ acm, onClose, onSaved }: { acm: Acm; onClose: () => void; onS
     <Shell title={`Edit · ${acm.serialNumber}`} onClose={() => !busy && onClose()}>
       <Field label="DISPLAY NAME">
         <input className="input" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+      </Field>
+      <Field label="ASSIGNED ACCESS NODE">
+        {nodes.length === 0 ? (
+          <div className="mono" style={{ font: "500 10.5px var(--font-mono-stack)", color: "var(--muted)" }}>No access nodes available.</div>
+        ) : (
+          <select className="select" value={nodeId} onChange={(e) => setNodeId(e.target.value)}>
+            {nodes.map((n) => (<option key={n.id} value={n.id}>{n.name} · L{n.level}</option>))}
+          </select>
+        )}
+        {moved && (
+          <div className="mono" style={{ font: "500 9.5px var(--font-mono-stack)", color: "var(--warn)", marginTop: 5, lineHeight: 1.5 }}>
+            Reassigning this device to a different node — its scan decisions will follow the new node&apos;s access rules.
+          </div>
+        )}
       </Field>
       <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
         <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} style={{ width: 16, height: 16, accentColor: "var(--accent)" }} />

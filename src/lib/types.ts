@@ -110,6 +110,11 @@ export interface Camera {
   level: number;
   active: boolean;
   snap: number;
+  /** last snapshot URL — fallback frame source for the live feed */
+  snapUrl: string | null;
+  /** map position (null if not placed) */
+  lat: number | null;
+  lng: number | null;
 }
 
 export interface Asset {

@@ -47,11 +47,62 @@ export default function LoginPage() {
   };
   const focus = (i: number) => inputs.current[i]?.focus();
 
+  // ---- RFID-reader input handling ----
+  // Card readers act as keyboards: they "type" the whole code in a rapid burst
+  // (chars ms apart), and many DON'T send a trailing Enter. Two failure modes
+  // to guard against: (a) no Enter → the code never submits; (b) a second tap
+  // appends to the first → concatenated garbage ("9E:…9E:…").
+  //
+  // We distinguish a reader from a human by keystroke timing. Chars <35ms apart
+  // = a scanner burst → after it settles we auto-submit. A fresh burst that
+  // arrives after a pause REPLACES the field so repeated taps never concatenate.
+  // Slow (human) typing does NOT auto-submit — the user presses Enter / CONTINUE.
+  const lastKeyAt = useRef(0);
+  const burstFast = useRef(false);
+  const scanIdle = useRef<number | null>(null);
+  const BURST_MS = 35;
+  const SETTLE_MS = 140;
+  const NEW_SCAN_GAP = 400;
+
+  const onCardChange = (raw: string) => {
+    const now = performance.now();
+    const gap = now - lastKeyAt.current;
+    lastKeyAt.current = now;
+
+    const prev = cardCode;
+    let next = raw;
+    // A new burst after a pause, appended onto an existing full code → it's a
+    // second scan; keep only the new part instead of concatenating.
+    const isAppend = raw.length > prev.length && raw.startsWith(prev);
+    if (gap > NEW_SCAN_GAP && prev.length >= 4 && isAppend) {
+      next = raw.slice(prev.length);
+      burstFast.current = true; // start of a new fast burst
+    } else if (gap <= BURST_MS && raw.length > prev.length) {
+      burstFast.current = true; // still inside a fast burst
+    } else if (raw.length <= prev.length) {
+      // deletion / manual edit — don't treat as a scan
+      burstFast.current = false;
+    } else if (gap > 120) {
+      burstFast.current = false; // human-speed typing
+    }
+
+    setCardCode(next);
+
+    // Only auto-submit when the input looks like a scanner burst.
+    if (scanIdle.current) window.clearTimeout(scanIdle.current);
+    if (burstFast.current) {
+      scanIdle.current = window.setTimeout(() => {
+        if (!busyRef.current && next.trim().length >= 4) continueCredential(next);
+      }, SETTLE_MS);
+    }
+  };
+
   useEffect(() => {
     setMounted(true);
     const scheduled = timers.current;
     return () => {
       scheduled.forEach(clearTimeout);
+      if (scanIdle.current) window.clearTimeout(scanIdle.current);
     };
   }, []);
 
@@ -380,7 +431,7 @@ export default function LoginPage() {
                         className="input mono"
                         style={{ width: "100%", height: 52, paddingLeft: 40, paddingRight: 14, font: "500 15px var(--font-mono-stack)", letterSpacing: "3px" }}
                         value={cardCode}
-                        onChange={(e) => setCardCode(e.target.value)}
+                        onChange={(e) => onCardChange(e.target.value)}
                         onKeyDown={(e) => e.key === "Enter" && !busy && continueCredential()}
                         placeholder={credType === "rfid" ? "tap card or type · then Enter" : "type the QR code · then Enter"}
                         autoComplete="off"

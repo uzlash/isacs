@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Plus, Trash2, Pencil, Upload } from "lucide-react";
-import FacilityKmlMap from "@/components/map/FacilityKmlMap";
+import FacilityKmlMap, { type NodeMarker, type PointMarker } from "@/components/map/FacilityKmlMap";
 import { PanelHeader } from "@/components/ui";
+import { useStore } from "@/lib/store";
 import { useSessionUser } from "@/lib/auth";
 import {
   deleteMapLayer,
@@ -23,6 +24,15 @@ const LAYER_COLS = "1.5fr 120px 60px 1.6fr 1.2fr 120px";
 export default function MapPage() {
   const user = useSessionUser();
   const canWrite = !!user && (WRITE_ROLES as string[]).includes(user.role);
+  const nodes = useStore((s) => s.nodes);
+  const cameras = useStore((s) => s.cameras);
+
+  const nodeMarkers: NodeMarker[] = nodes
+    .filter((n) => n.latitude != null && n.longitude != null)
+    .map((n) => ({ id: n.id, name: n.name, lat: n.latitude as number, lng: n.longitude as number }));
+  const cameraMarkers: PointMarker[] = cameras
+    .filter((c) => c.lat != null && c.lng != null)
+    .map((c) => ({ id: c.id, name: `📷 ${c.name}`, lat: c.lat as number, lng: c.lng as number, color: "#e3a008", muted: !c.active }));
 
   const [layers, setLayers] = useState<MapLayer[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -128,9 +138,9 @@ export default function MapPage() {
     <div style={{ maxWidth: 1500, margin: "0 auto", display: "flex", flexDirection: "column", gap: 16 }}>
       {/* COMPOSITE MAP */}
       <div className="panel" style={{ overflow: "hidden" }}>
-        <PanelHeader title="FACILITY MAP" sub="· composite KML · layers stacked by level" right={<span className="panel-sub">{layers.length} layer(s)</span>} />
+        <PanelHeader title="FACILITY MAP" sub="· composite KML · nodes + cameras" right={<span className="panel-sub">{layers.length} layer(s) · {nodeMarkers.length} node(s) · {cameraMarkers.length} camera(s)</span>} />
         <div style={{ padding: 14 }}>
-          <FacilityKmlMap height={520} refreshKey={refreshKey} />
+          <FacilityKmlMap height={520} refreshKey={refreshKey} nodeMarkers={nodeMarkers} pointMarkers={cameraMarkers} />
         </div>
       </div>
 

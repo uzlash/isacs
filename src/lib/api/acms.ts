@@ -79,6 +79,9 @@ export async function createAcm(body: CreateAcmInput): Promise<AcmRegistration> 
 export interface UpdateAcmInput {
   name?: string;
   isActive?: boolean;
+  /** Reassign the device to a different access node. NOTE: not in the original
+   *  API doc for PUT /acms/:id — the backend may reject it with 400. */
+  nodeId?: string;
 }
 
 export async function updateAcm(id: string, body: UpdateAcmInput): Promise<Acm> {

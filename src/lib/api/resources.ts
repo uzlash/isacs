@@ -76,6 +76,13 @@ interface ApiNode {
   parentId: string | null;
   maxFailedTries: number;
 }
+export interface ApiCardAssignment {
+  id: string;
+  holderType: "staff" | "visitor" | "asset";
+  holderId: string;
+  revokedAt?: string | null;
+  accessNodeIds?: string[];
+}
 export interface ApiCard {
   id: string;
   cardNumber: string;
@@ -83,6 +90,8 @@ export interface ApiCard {
   qrCode?: string | null;
   type: CardType;
   isActive: boolean;
+  /** present only on GET /cards/:id — active (non-revoked) assignments */
+  cardAssignments?: ApiCardAssignment[];
 }
 interface ApiCamera {
   id: string;
@@ -90,7 +99,10 @@ interface ApiCamera {
   location: string;
   level: number;
   isActive: boolean;
+  longitude?: number | null;
+  latitude?: number | null;
   lastSnapshotAt?: string | null;
+  lastSnapshotUrl?: string | null;
 }
 export interface ApiAsset {
   id: string;
@@ -172,16 +184,25 @@ export async function fetchNodes(): Promise<AccessNode[]> {
   return data.map(mapNode);
 }
 
-export const mapCard = (c: ApiCard): AccessCard => ({
-  id: c.id,
-  num: c.cardNumber,
-  rfid: c.rfidTag ?? null,
-  qr: c.qrCode ?? null,
-  type: c.type,
-  active: c.isActive,
-  holder: "—", // TODO: resolve via GET /cards/:id assignment + holder lookup
-  nodes: [], // TODO: from active assignment accessNodeIds
-});
+/** Resolve a holderId to a display name across staff/visitor/asset lists. */
+export type HolderResolver = (holderType: string, holderId: string) => string | undefined;
+
+export const mapCard = (c: ApiCard, resolveHolder?: HolderResolver): AccessCard => {
+  const active = (c.cardAssignments ?? []).find((a) => !a.revokedAt);
+  const holder = active
+    ? resolveHolder?.(active.holderType, active.holderId) || `${active.holderType} ${active.holderId.slice(0, 8)}`
+    : "—";
+  return {
+    id: c.id,
+    num: c.cardNumber,
+    rfid: c.rfidTag ?? null,
+    qr: c.qrCode ?? null,
+    type: c.type,
+    active: c.isActive,
+    holder,
+    nodes: active?.accessNodeIds ?? [],
+  };
+};
 
 const mapCamera = (c: ApiCamera): Camera => ({
   id: c.id,
@@ -190,6 +211,9 @@ const mapCamera = (c: ApiCamera): Camera => ({
   level: c.level ?? 0,
   active: c.isActive,
   snap: ts(c.lastSnapshotAt) ?? 0,
+  snapUrl: c.lastSnapshotUrl ?? null,
+  lat: c.latitude ?? null,
+  lng: c.longitude ?? null,
 });
 
 export const mapAsset = (a: ApiAsset): Asset => ({
@@ -274,9 +298,23 @@ export async function fetchAssets(): Promise<Asset[]> {
   const { data } = await api.get<ApiAsset[]>("/assets");
   return data.map(mapAsset);
 }
-export async function fetchCards(): Promise<AccessCard[]> {
+// The /cards LIST returns no assignment data — holder + nodes live on each
+// card's detail (GET /cards/:id → cardAssignments). So we fetch details in
+// parallel and enrich. `resolveHolder` maps a holderId to a display name
+// using the store's staff/visitor/asset lists.
+export async function fetchCards(resolveHolder?: HolderResolver): Promise<AccessCard[]> {
   const { data } = await api.get<ApiCard[]>("/cards");
-  return data.map(mapCard);
+  const detailed = await Promise.all(
+    data.map(async (c) => {
+      try {
+        const { data: full } = await api.get<ApiCard>(`/cards/${c.id}`);
+        return mapCard(full, resolveHolder);
+      } catch {
+        return mapCard(c, resolveHolder); // fall back to the thin list row
+      }
+    })
+  );
+  return detailed;
 }
 
 export function mapUser(u: ApiUser, staffById: Map<string, string>): User {
@@ -356,18 +394,39 @@ export async function loadAll(): Promise<LiveData> {
 
   const staff = staffRaw.map(mapStaff);
   const staffById = new Map(staff.map((s) => [s.id, s.name]));
+  const visitors = visitorsRaw.map(mapVisitor);
+  const assets = assetsRaw.map(mapAsset);
 
   const users: User[] = usersRaw.map((u) => mapUser(u, staffById));
+
+  // holder-name resolver across the three holder populations
+  const visById = new Map(visitors.map((v) => [v.id, v.name]));
+  const assetById = new Map(assets.map((a) => [a.id, a.name]));
+  const resolveHolder: HolderResolver = (t, id) =>
+    t === "staff" ? staffById.get(id) : t === "visitor" ? visById.get(id) : assetById.get(id);
+
+  // enrich cards with their assignment (holder + nodes) — /cards omits it, so
+  // pull each card's detail. Best-effort: a failed detail falls back to the row.
+  const cards = await Promise.all(
+    cardsRaw.map(async (c) => {
+      try {
+        const { data: full } = await api.get<ApiCard>(`/cards/${c.id}`);
+        return mapCard(full, resolveHolder);
+      } catch {
+        return mapCard(c, resolveHolder);
+      }
+    })
+  );
 
   return {
     staff,
     users,
-    visitors: visitorsRaw.map(mapVisitor),
+    visitors,
     appointments: apptsRaw.map(mapAppointment),
     nodes: nodesRaw.map(mapNode),
-    cards: cardsRaw.map(mapCard),
+    cards,
     cameras: camerasRaw.map(mapCamera),
-    assets: assetsRaw.map(mapAsset),
+    assets,
     incidents: reportsRaw.map(mapReport),
     settings: mapSettings(settingsRaw),
   };

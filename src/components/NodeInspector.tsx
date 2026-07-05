@@ -1,11 +1,14 @@
 "use client";
 
-import { useState } from "react";
-import { Lock, MapPin, Pencil, Trash2, Users } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Cpu, Lock, MapPin, Pencil, Plus, Trash2, Users, Wifi, WifiOff } from "lucide-react";
 import FacilityKmlMap, { type NodeMarker } from "@/components/map/FacilityKmlMap";
 import { deleteNode } from "@/lib/api/nodes";
 import { initiateLockdown, liftLockdown, type Lockdown } from "@/lib/api/lockdown";
+import { listAcms, type Acm } from "@/lib/api/acms";
 import { useStore } from "@/lib/store";
+import { isLive } from "@/lib/config";
 import type { AccessNode } from "@/lib/types";
 
 interface Props {
@@ -21,10 +24,29 @@ interface Props {
 
 export default function NodeInspector({ node, nodes, active, canWrite, refreshLockdown, onSelect, onEdit, onDeleted }: Props) {
   const users = useStore((s) => s.users);
+  const router = useRouter();
   const [modal, setModal] = useState<null | "lock" | "lift">(null);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+
+  // ACM modules attached to the selected node (live mode).
+  const [acms, setAcms] = useState<Acm[] | null>(null);
+  const nodeId = node?.id;
+  useEffect(() => {
+    if (!isLive || !nodeId) {
+      setAcms(null);
+      return;
+    }
+    let cancelled = false;
+    setAcms(null);
+    listAcms({ nodeId })
+      .then((list) => !cancelled && setAcms(list))
+      .catch(() => !cancelled && setAcms([]));
+    return () => {
+      cancelled = true;
+    };
+  }, [nodeId]);
 
   const markers: NodeMarker[] = nodes
     .filter((n) => n.latitude != null && n.longitude != null)
@@ -150,6 +172,48 @@ export default function NodeInspector({ node, nodes, active, canWrite, refreshLo
             </div>
           )}
         </div>
+
+        {/* ACM modules mounted at this node */}
+        {isLive && (
+          <div style={{ marginTop: 12, border: "1px solid var(--border)", borderRadius: 9, overflow: "hidden" }}>
+            <div style={{ padding: "9px 12px", borderBottom: acms && acms.length ? "1px solid var(--border)" : "none", display: "flex", alignItems: "center", gap: 7, background: "var(--bg)" }}>
+              <Cpu size={12} strokeWidth={1.9} color="var(--muted)" />
+              <span className="mono" style={{ font: "600 9px var(--font-mono-stack)", letterSpacing: ".6px", color: "var(--faint)" }}>ACCESS CONTROL MODULES</span>
+              <span className="mono" style={{ font: "600 9px var(--font-mono-stack)", color: acms && acms.length ? "var(--accent)" : "var(--faint)" }}>· {acms ? acms.length : "…"}</span>
+              <div style={{ flex: 1 }} />
+              {canWrite && (
+                <button
+                  onClick={() => router.push("/acms")}
+                  className="mono"
+                  title="Register a module for this node"
+                  style={{ display: "flex", alignItems: "center", gap: 4, font: "600 8.5px var(--font-mono-stack)", letterSpacing: ".4px", color: "var(--accent)", background: "transparent", border: "1px solid var(--border2)", borderRadius: 5, padding: "3px 7px", cursor: "pointer" }}
+                >
+                  <Plus size={10} strokeWidth={2.6} /> REGISTER
+                </button>
+              )}
+            </div>
+            {acms === null ? (
+              <div className="mono" style={{ padding: "10px 12px", font: "500 10px var(--font-mono-stack)", color: "var(--faint)" }}>loading modules…</div>
+            ) : acms.length > 0 ? (
+              <div style={{ display: "flex", flexDirection: "column" }}>
+                {acms.map((a) => (
+                  <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderTop: "1px solid var(--border)" }}>
+                    {a.isOnline ? <Wifi size={12} strokeWidth={2} color="var(--ok)" /> : <WifiOff size={12} strokeWidth={2} color="var(--faint)" />}
+                    <span style={{ font: "500 11.5px var(--font-sans-stack)", color: "var(--fg)" }}>{a.name}</span>
+                    <span className="mono" style={{ font: "500 9.5px var(--font-mono-stack)", color: "var(--faint)" }}>{a.serialNumber}</span>
+                    <div style={{ flex: 1 }} />
+                    {!a.isActive && <span className="mono" style={{ font: "600 8px var(--font-mono-stack)", color: "var(--faint)", border: "1px solid var(--border2)", borderRadius: 3, padding: "1px 5px" }}>DISABLED</span>}
+                    <span className="mono" style={{ font: "600 8px var(--font-mono-stack)", letterSpacing: ".3px", color: a.isOnline ? "var(--ok)" : "var(--faint)" }}>{a.isOnline ? "ONLINE" : "OFFLINE"}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="mono" style={{ padding: "10px 12px", font: "500 10px var(--font-mono-stack)", color: "var(--faint)" }}>
+                No modules mounted at this node yet.
+              </div>
+            )}
+          </div>
+        )}
 
         <div style={{ display: "flex", gap: 8, marginTop: 16, flexWrap: "wrap" }}>
           {canWrite && (

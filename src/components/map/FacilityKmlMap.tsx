@@ -20,6 +20,17 @@ export interface NodeMarker {
   lng: number;
 }
 
+export interface PointMarker {
+  id: string;
+  name: string;
+  lat: number;
+  lng: number;
+  /** marker color (defaults to a neutral); use to distinguish cameras etc. */
+  color?: string;
+  /** dimmed styling (e.g. an offline/inactive camera) */
+  muted?: boolean;
+}
+
 interface Props {
   height?: number | string;
   showSwitcher?: boolean;
@@ -34,6 +45,9 @@ interface Props {
   nodeMarkers?: NodeMarker[];
   selectedNodeId?: string | null;
   onNodeClick?: (id: string) => void;
+  /** non-selectable overlay markers (e.g. cameras) with tooltips */
+  pointMarkers?: PointMarker[];
+  onPointClick?: (id: string) => void;
   /** center the map on a point (e.g. the selected node) */
   focus?: { lat: number; lng: number; zoom?: number } | null;
 }
@@ -51,6 +65,8 @@ export default function FacilityKmlMap({
   nodeMarkers,
   selectedNodeId,
   onNodeClick,
+  pointMarkers,
+  onPointClick,
   focus,
 }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -60,6 +76,7 @@ export default function FacilityKmlMap({
   const groupsRef = useRef<Record<string, LeafletGeoJSON>>({});
   const pickRef = useRef<CircleMarker | null>(null);
   const nodeLayerRef = useRef<LayerGroup | null>(null);
+  const pointLayerRef = useRef<LayerGroup | null>(null);
   // the building/site/floor bounds used for the default framing — reused by the
   // focus effect so the inspector frames the facility identically to /map.
   const focusBoundsRef = useRef<import("leaflet").LatLngBounds | null>(null);
@@ -180,6 +197,7 @@ export default function FacilityKmlMap({
       groupsRef.current = {};
       pickRef.current = null;
       nodeLayerRef.current = null;
+      pointLayerRef.current = null;
       focusBoundsRef.current = null;
       setMapReady(false);
       if (map) map.remove();
@@ -289,6 +307,36 @@ export default function FacilityKmlMap({
       nodeLayerRef.current = group;
     }
   }, [mapReady, nodeMarkers, selectedNodeId, onNodeClick]);
+
+  // ---- overlay point markers (e.g. cameras) ----
+  useEffect(() => {
+    const map = mapRef.current;
+    const L = LRef.current;
+    if (!map || !mapReady || !L) return;
+    if (pointLayerRef.current) {
+      map.removeLayer(pointLayerRef.current);
+      pointLayerRef.current = null;
+    }
+    if (pointMarkers && pointMarkers.length) {
+      const group = L.layerGroup();
+      for (const pt of pointMarkers) {
+        const color = pt.color || "#e3a008";
+        const m = L.circleMarker([pt.lat, pt.lng], {
+          radius: 6,
+          color,
+          weight: 2,
+          fillColor: color,
+          fillOpacity: pt.muted ? 0.2 : 0.55,
+          opacity: pt.muted ? 0.5 : 1,
+        });
+        m.bindTooltip(pt.name, { direction: "top", offset: [0, -6] });
+        if (onPointClick) m.on("click", () => onPointClick(pt.id));
+        m.addTo(group);
+      }
+      group.addTo(map);
+      pointLayerRef.current = group;
+    }
+  }, [mapReady, pointMarkers, onPointClick]);
 
   const toggle = (id: string) => {
     const gl = groupsRef.current[id];

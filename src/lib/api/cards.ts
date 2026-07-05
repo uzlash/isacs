@@ -28,7 +28,7 @@ function query(f?: CardFilter): string {
 
 export async function listCards(filter?: CardFilter): Promise<AccessCard[]> {
   const { data } = await api.get<ApiCard[]>(`/cards${query(filter)}`);
-  return data.map(mapCard);
+  return data.map((c) => mapCard(c)); // thin rows (no assignment enrichment)
 }
 
 export interface CreateCardInput {

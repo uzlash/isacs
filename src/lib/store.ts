@@ -498,7 +498,14 @@ export const useStore = create<State>((set, get) => {
     },
     refreshCards: async () => {
       try {
-        set({ cards: await fetchCards() });
+        // resolve holder names from the current store lists
+        const s = get();
+        const staffById = new Map(s.staff.map((x) => [x.id, x.name]));
+        const visById = new Map(s.visitors.map((x) => [x.id, x.name]));
+        const assetById = new Map(s.assets.map((x) => [x.id, x.name]));
+        const resolveHolder = (t: string, id: string) =>
+          t === "staff" ? staffById.get(id) : t === "visitor" ? visById.get(id) : assetById.get(id);
+        set({ cards: await fetchCards(resolveHolder) });
       } catch {
         /* keep current */
       }

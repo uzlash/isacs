@@ -21,6 +21,8 @@ import {
   type BbiwSeverity,
 } from "@/lib/api/bbiw";
 import { uploadCameraSnapshot } from "@/lib/api/uploads";
+import CameraFeed from "@/components/CameraFeed";
+import FacilityKmlMap from "@/components/map/FacilityKmlMap";
 import type { Camera } from "@/lib/types";
 
 const WRITE_ROLES = ["super_admin", "security_manager", "staff_admin"];
@@ -58,6 +60,7 @@ async function openBbiw(setBusy?: (b: boolean) => void, deepLinkPath?: string) {
 type Modal =
   | { kind: "create" }
   | { kind: "edit"; cam: Camera }
+  | { kind: "feed"; cam: Camera }
   | { kind: "bbiwFilters" };
 
 export default function SurveillancePage() {
@@ -120,30 +123,15 @@ export default function SurveillancePage() {
           const tone = c.active ? "var(--ok)" : "var(--faint)";
           return (
             <div key={c.id} className="panel" style={{ overflow: "hidden" }}>
-              {/* feed area */}
-              <div
-                style={{
-                  position: "relative",
-                  aspectRatio: "16 / 10",
-                  background:
-                    "repeating-linear-gradient(45deg,#0a0e14,#0a0e14 8px,#0d121a 8px,#0d121a 16px)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  overflow: "hidden",
-                }}
-              >
-                <div style={{ position: "absolute", inset: 0, background: "linear-gradient(transparent,rgba(0,0,0,.4))" }} />
-                <span className="mono" style={{ font: "500 10px var(--font-mono-stack)", color: "var(--faint)", zIndex: 1 }}>
-                  {c.active ? "◉ RTSP FEED" : "NO SIGNAL"}
-                </span>
-                <div style={{ position: "absolute", top: 7, left: 8, display: "flex", alignItems: "center", gap: 5, zIndex: 1 }}>
-                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: tone, boxShadow: `0 0 6px ${tone}` }} />
-                  <span className="mono" style={{ font: "600 8px var(--font-mono-stack)", letterSpacing: ".5px", color: tone }}>
-                    {c.active ? "ONLINE" : "OFFLINE"}
-                  </span>
-                </div>
-                <div className="mono" style={{ position: "absolute", top: 7, right: 8, font: "500 8px var(--font-mono-stack)", color: "var(--faint)", zIndex: 1 }}>
+              {/* live feed — MJPEG (ffmpeg) with snapshot fallback */}
+              <div style={{ position: "relative" }}>
+                <CameraFeed
+                  cameraId={c.id}
+                  active={c.active}
+                  snapshotUrl={c.snapUrl}
+                  onMaximize={() => setModal({ kind: "feed", cam: c })}
+                />
+                <div className="mono" style={{ position: "absolute", bottom: 7, right: 8, font: "500 8px var(--font-mono-stack)", color: "#cbd5e1", textShadow: "0 1px 3px #000", zIndex: 2, pointerEvents: "none" }}>
                   L{c.level}
                 </div>
               </div>
@@ -217,6 +205,29 @@ export default function SurveillancePage() {
       {modal?.kind === "bbiwFilters" && (
         <BbiwFiltersModal onClose={() => setModal(null)} />
       )}
+
+      {modal?.kind === "feed" && (
+        <FeedModal cam={modal.cam} onClose={() => setModal(null)} />
+      )}
+    </div>
+  );
+}
+
+// Maximized single-camera view.
+function FeedModal({ cam, onClose }: { cam: Camera; onClose: () => void }) {
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 80, padding: 24 }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ width: "min(1100px, 96vw)", background: "var(--panel)", border: "1px solid var(--border2)", borderRadius: 12, overflow: "hidden", boxShadow: "0 30px 80px rgba(0,0,0,.6)" }}>
+        <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ font: "600 13px var(--font-sans-stack)", color: "var(--fg)" }}>{cam.name}</span>
+          <span className="mono" style={{ font: "500 10px var(--font-mono-stack)", color: "var(--faint)" }}>{cam.loc} · L{cam.level}</span>
+          <div style={{ flex: 1 }} />
+          <button onClick={onClose} className="mono" style={{ background: "none", border: "1px solid var(--border2)", borderRadius: 7, color: "var(--muted)", cursor: "pointer", font: "600 10px var(--font-mono-stack)", padding: "5px 11px" }}>CLOSE ✕</button>
+        </div>
+        <div style={{ background: "#000" }}>
+          <CameraFeed cameraId={cam.id} active={cam.active} snapshotUrl={cam.snapUrl} pollMs={1000} />
+        </div>
+      </div>
     </div>
   );
 }
@@ -485,15 +496,32 @@ function CameraForm({ cam, onClose, onSaved }: { cam?: Camera; onClose: () => vo
           <Field label="LEVEL (OPTIONAL)">
             <input className="input mono" type="number" value={level} onChange={(e) => setLevel(e.target.value)} placeholder="0" />
           </Field>
+
+          {/* Pinpoint the camera on the facility map — click to fill lat/lng. */}
+          <Field label="LOCATION ON MAP (OPTIONAL)">
+            <div className="mono" style={{ font: "500 9.5px var(--font-mono-stack)", color: "var(--faint)", marginBottom: 7, lineHeight: 1.5 }}>
+              Click where the camera is mounted — its coordinates are captured below.
+            </div>
+            <FacilityKmlMap
+              height={260}
+              showSwitcher={false}
+              onMapClick={(lat, lng) => { setLatitude(String(lat)); setLongitude(String(lng)); }}
+              marker={
+                Number.isFinite(Number(latitude)) && latitude.trim() && Number.isFinite(Number(longitude)) && longitude.trim()
+                  ? { lat: Number(latitude), lng: Number(longitude) }
+                  : null
+              }
+            />
+          </Field>
           <div style={{ display: "flex", gap: 12 }}>
             <div style={{ flex: 1 }}>
               <Field label="LONGITUDE (OPTIONAL)">
-                <input className="input mono" type="number" value={longitude} onChange={(e) => setLongitude(e.target.value)} placeholder="—" />
+                <input className="input mono" type="number" value={longitude} onChange={(e) => setLongitude(e.target.value)} placeholder="click map or type" />
               </Field>
             </div>
             <div style={{ flex: 1 }}>
               <Field label="LATITUDE (OPTIONAL)">
-                <input className="input mono" type="number" value={latitude} onChange={(e) => setLatitude(e.target.value)} placeholder="—" />
+                <input className="input mono" type="number" value={latitude} onChange={(e) => setLatitude(e.target.value)} placeholder="click map or type" />
               </Field>
             </div>
           </div>
