@@ -3,13 +3,22 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { LogOut } from "lucide-react";
 import { NAV, viewIdForPath } from "./nav";
 import { openIncidentCount, useStore } from "@/lib/store";
+import { doLogout, useSessionUser } from "@/lib/auth";
+import { roleMeta } from "@/lib/format";
+import type { Role } from "@/lib/types";
 
 export default function Sidebar() {
   const pathname = usePathname();
   const activeView = viewIdForPath(pathname);
   const openCount = useStore((s) => openIncidentCount(s.incidents));
+  const user = useSessionUser();
+  const email = user?.email ?? "";
+  const initials = email ? email.replace(/[^a-zA-Z]/g, "").slice(0, 2).toUpperCase() : "OP";
+  const displayName = email ? email.split("@")[0] : "Operator";
+  const roleLabel = user ? roleMeta[user.role as Role]?.label ?? user.role : "";
 
   return (
     <aside
@@ -140,10 +149,11 @@ export default function Sidebar() {
               font: "700 12px var(--font-mono-stack)",
             }}
           >
-            SA
+            {initials}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div
+              title={email}
               style={{
                 font: "600 11.5px var(--font-sans-stack)",
                 color: "var(--fg)",
@@ -152,15 +162,34 @@ export default function Sidebar() {
                 textOverflow: "ellipsis",
               }}
             >
-              Cmdr. R. Okafor
+              {displayName}
             </div>
             <div
               className="mono"
-              style={{ font: "500 9px var(--font-mono-stack)", letterSpacing: ".5px", color: "var(--accent)" }}
+              style={{ font: "500 9px var(--font-mono-stack)", letterSpacing: ".5px", color: "var(--accent)", textTransform: "uppercase" }}
             >
-              SUPER ADMIN
+              {roleLabel || "SIGNED IN"}
             </div>
           </div>
+          <button
+            onClick={() => doLogout()}
+            title="Sign out"
+            style={{
+              width: 28,
+              height: 28,
+              flex: "0 0 28px",
+              borderRadius: 7,
+              border: "1px solid var(--border2)",
+              background: "transparent",
+              color: "var(--muted)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+            }}
+          >
+            <LogOut size={14} strokeWidth={1.8} />
+          </button>
         </div>
       </div>
     </aside>

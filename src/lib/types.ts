@@ -40,7 +40,13 @@ export interface User {
   id: string;
   email: string;
   role: Role;
+  /** linked staff display name ("—" if none) */
   staff: string;
+  /** linked staff id (for editing) */
+  staffId: string | null;
+  /** access nodes this personnel account is assigned to (security_personnel
+   *  only; null for other roles or unassigned) */
+  assignedNodeIds: string[] | null;
   active: boolean;
   last: string;
 }
@@ -80,6 +86,8 @@ export interface AccessNode {
   level: number;
   max: number;
   loc: string;
+  longitude: number | null;
+  latitude: number | null;
 }
 
 export type CardType = "staff" | "visitor" | "vehicle";
@@ -135,6 +143,10 @@ export interface Incident {
   investigator: string | null;
   created: number;
   images: number;
+  /** attachment URLs — for BBIW surveillance reports imageUrls[0] is an MP4 clip */
+  imageUrls: string[];
+  /** the source record ref — for BBIW reports this is the ISACS camera UUID */
+  sourceRef: string | null;
   resolution?: string;
   resolvedAt?: number;
   log: IncidentLog[];
@@ -155,6 +167,16 @@ export interface FeedEvent {
   text: string;
   /** CSS color token, e.g. "var(--ok)" */
   tone: string;
+  at: number;
+}
+
+// A transient on-screen alert for a live BBIW detection (SSE-driven).
+export interface DetectionToast {
+  id: number;
+  rule: string;
+  camera: string;
+  severity: string;
+  clipUrl: string | null;
   at: number;
 }
 

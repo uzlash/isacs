@@ -34,12 +34,12 @@ export const seedStaff = (): Staff[] => [
 ];
 
 export const seedUsers = (): User[] => [
-  { id: "u1", email: "r.okafor@alpha.mil", role: "super_admin", staff: "Cmdr. R. Okafor", active: true, last: "2m ago" },
-  { id: "u2", email: "m.vasquez@alpha.mil", role: "security_manager", staff: "Lt. M. Vasquez", active: true, last: "11m ago" },
-  { id: "u3", email: "d.park@alpha.mil", role: "security_personnel", staff: "Sgt. D. Park", active: true, last: "4m ago" },
-  { id: "u4", email: "a.bauer@alpha.mil", role: "security_personnel", staff: "Cpl. A. Bauer", active: true, last: "1h ago" },
-  { id: "u5", email: "h.tanaka@alpha.mil", role: "staff_admin", staff: "H. Tanaka", active: true, last: "3h ago" },
-  { id: "u6", email: "audit@alpha.mil", role: "auditor", staff: "—", active: false, last: "6d ago" },
+  { id: "u1", email: "r.okafor@alpha.mil", role: "super_admin", staff: "Cmdr. R. Okafor", staffId: null, assignedNodeIds: null, active: true, last: "2m ago" },
+  { id: "u2", email: "m.vasquez@alpha.mil", role: "security_manager", staff: "Lt. M. Vasquez", staffId: null, assignedNodeIds: null, active: true, last: "11m ago" },
+  { id: "u3", email: "d.park@alpha.mil", role: "security_personnel", staff: "Sgt. D. Park", staffId: null, assignedNodeIds: ["n1", "n2"], active: true, last: "4m ago" },
+  { id: "u4", email: "a.bauer@alpha.mil", role: "security_personnel", staff: "Cpl. A. Bauer", staffId: null, assignedNodeIds: ["n5"], active: true, last: "1h ago" },
+  { id: "u5", email: "h.tanaka@alpha.mil", role: "staff_admin", staff: "H. Tanaka", staffId: null, assignedNodeIds: null, active: true, last: "3h ago" },
+  { id: "u6", email: "audit@alpha.mil", role: "auditor", staff: "—", staffId: null, assignedNodeIds: null, active: false, last: "6d ago" },
 ];
 
 export const seedVisitors = (now: number): Visitor[] => [
@@ -61,15 +61,15 @@ export const seedAppointments = (now: number): Appointment[] => [
 ];
 
 export const seedNodes = (): AccessNode[] => [
-  { id: "n1", name: "Main Compound Gate", parent: null, level: 0, max: 3, loc: "Perimeter — South" },
-  { id: "n2", name: "Building A Entrance", parent: "n1", level: 0, max: 3, loc: "Bldg A — Lobby" },
-  { id: "n3", name: "Floor 1 — General", parent: "n2", level: 1, max: 3, loc: "Bldg A — L1" },
-  { id: "n4", name: "Floor 2 — Restricted", parent: "n2", level: 2, max: 3, loc: "Bldg A — L2" },
-  { id: "n5", name: "Server Room", parent: "n4", level: 2, max: 2, loc: "Bldg A — L2 secure" },
-  { id: "n6", name: "Vehicle Bay", parent: "n1", level: 0, max: 3, loc: "Yard — East" },
-  { id: "n7", name: "Vehicle Inspection Point", parent: "n6", level: 0, max: 3, loc: "Yard — Checkpoint" },
-  { id: "n8", name: "Building B Entrance", parent: "n1", level: 0, max: 3, loc: "Bldg B — Lobby" },
-  { id: "n9", name: "Comms Room", parent: "n8", level: 1, max: 2, loc: "Bldg B — L1 secure" },
+  { id: "n1", name: "Main Compound Gate", parent: null, level: 0, max: 3, loc: "Perimeter — South", longitude: null, latitude: null },
+  { id: "n2", name: "Building A Entrance", parent: "n1", level: 0, max: 3, loc: "Bldg A — Lobby", longitude: null, latitude: null },
+  { id: "n3", name: "Floor 1 — General", parent: "n2", level: 1, max: 3, loc: "Bldg A — L1", longitude: null, latitude: null },
+  { id: "n4", name: "Floor 2 — Restricted", parent: "n2", level: 2, max: 3, loc: "Bldg A — L2", longitude: null, latitude: null },
+  { id: "n5", name: "Server Room", parent: "n4", level: 2, max: 2, loc: "Bldg A — L2 secure", longitude: null, latitude: null },
+  { id: "n6", name: "Vehicle Bay", parent: "n1", level: 0, max: 3, loc: "Yard — East", longitude: null, latitude: null },
+  { id: "n7", name: "Vehicle Inspection Point", parent: "n6", level: 0, max: 3, loc: "Yard — Checkpoint", longitude: null, latitude: null },
+  { id: "n8", name: "Building B Entrance", parent: "n1", level: 0, max: 3, loc: "Bldg B — Lobby", longitude: null, latitude: null },
+  { id: "n9", name: "Comms Room", parent: "n8", level: 1, max: 2, loc: "Bldg B — L1 secure", longitude: null, latitude: null },
 ];
 
 export const seedCards = (): AccessCard[] => [
@@ -100,7 +100,8 @@ export const seedAssets = (): Asset[] => [
   { id: "as5", name: "Cargo Forklift", type: "Equipment", vehicle: false, plate: null, tracker: null, protoActive: false, speed: null, geo: false },
 ];
 
-export const seedIncidents = (now: number): Incident[] => [
+// base rows omit imageUrls/sourceRef; defaults are injected below.
+const seedIncidentRows = (now: number): Omit<Incident, "imageUrls" | "sourceRef">[] => [
   { id: "I-2048", source: "access", sev: "critical", status: "open", desc: "Card QR-VIS-7741 failed access at Server Room 3 times", node: "Server Room", investigator: null, created: now - 3 * MIN, images: 2, log: [{ t: now - 3 * MIN, s: "Auto-created by Access Control Engine" }] },
   { id: "I-2047", source: "assets", sev: "high", status: "investigating", desc: "Supply Truck 2 exceeded geofence boundary — Sector E", node: "Perimeter", investigator: "Cpl. A. Bauer", created: now - 22 * MIN, images: 1, log: [{ t: now - 22 * MIN, s: "Auto-created by Asset Protocol breach" }, { t: now - 18 * MIN, s: "Assigned to Cpl. A. Bauer" }] },
   { id: "I-2046", source: "surveillance", sev: "medium", status: "investigating", desc: "Unidentified individual loitering near Vehicle Bay (CAM-05)", node: "Vehicle Bay", investigator: "Sgt. D. Park", created: now - 54 * MIN, images: 3, log: [{ t: now - 54 * MIN, s: "Escalated from CAM-05 by Lt. M. Vasquez" }, { t: now - 50 * MIN, s: "Assigned to Sgt. D. Park" }] },
@@ -108,6 +109,9 @@ export const seedIncidents = (now: number): Incident[] => [
   { id: "I-2044", source: "access", sev: "high", status: "resolved", desc: "Repeated failed access at Comms Room — deactivated card", node: "Comms Room", investigator: "Cpl. A. Bauer", created: now - HOUR * 5, images: 1, resolution: "Card CARD-00236 confirmed lost; deactivated and reissued. No breach.", resolvedAt: now - HOUR * 4, log: [{ t: now - HOUR * 5, s: "Auto-created by Access Control Engine" }, { t: now - HOUR * 4.6, s: "Assigned to Cpl. A. Bauer" }, { t: now - HOUR * 4, s: "Resolved" }] },
   { id: "I-2043", source: "surveillance", sev: "medium", status: "resolved", desc: "Motion flagged at North Fence after hours (CAM-07)", node: "Perimeter North", investigator: "Sgt. D. Park", created: now - HOUR * 9, images: 2, resolution: "Wildlife confirmed via snapshot review. No action required.", resolvedAt: now - HOUR * 8, log: [{ t: now - HOUR * 9, s: "Escalated from CAM-07" }, { t: now - HOUR * 8, s: "Resolved" }] },
 ];
+
+export const seedIncidents = (now: number): Incident[] =>
+  seedIncidentRows(now).map((r) => ({ ...r, imageUrls: [], sourceRef: null }));
 
 export const seedFeed = (now: number): FeedEvent[] => [
   { id: 1, module: "ACCESS", text: "Sgt. D. Park granted entry · Building A Entrance", tone: "var(--ok)", at: now - 12_000 },

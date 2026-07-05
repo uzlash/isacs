@@ -1,9 +1,14 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  CalendarClock,
   Clock,
+  Cpu,
   CreditCard,
+  Lock,
+  MapPin,
   Truck,
   TriangleAlert,
   Users,
@@ -11,9 +16,11 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { openIncidentCount, useStore } from "@/lib/store";
+import { isLive } from "@/lib/config";
 import { rel } from "@/lib/format";
+import { getDashboardAnalytics, type DashboardAnalytics } from "@/lib/api/analytics";
 import { PanelHeader, SevPill } from "@/components/ui";
-import FacilityMap from "@/components/FacilityMap";
+import FacilityKmlMap from "@/components/map/FacilityKmlMap";
 
 interface Kpi {
   label: string;
@@ -43,14 +50,42 @@ export default function DashboardPage() {
   useStore((s) => s.tick); // re-render on clock tick for relative times
   const incidents = useStore((s) => s.incidents);
   const visitors = useStore((s) => s.visitors);
+  const cards = useStore((s) => s.cards);
+  const cameras = useStore((s) => s.cameras);
+  const assets = useStore((s) => s.assets);
   const feed = useStore((s) => s.feed);
   const selectIncident = useStore((s) => s.selectIncident);
 
-  const openCount = openIncidentCount(incidents);
-  const onSite = visitors.filter((v) => v.checkedIn).length + 39;
+  // Live analytics from GET /analytics/dashboard (role-shaped). Falls back to
+  // store-derived KPIs when unavailable (mock mode, or the endpoint errors).
+  const [analytics, setAnalytics] = useState<DashboardAnalytics | null>(null);
+  useEffect(() => {
+    if (!isLive) return;
+    let cancelled = false;
+    const load = () => {
+      getDashboardAnalytics()
+        .then((a) => !cancelled && setAnalytics(a))
+        .catch(() => {
+          /* keep the store-derived fallback */
+        });
+    };
+    load();
+    const id = setInterval(load, 30000); // refresh periodically
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, []);
 
-  const kpis: Kpi[] = [
-    { label: "People On Site", value: String(onSite), sub: "↑ staff + visitors", tone: "var(--accent)", icon: Users },
+  const openCount = openIncidentCount(incidents);
+  const onSite = visitors.filter((v) => v.checkedIn).length;
+  const activeCards = cards.filter((c) => c.active).length;
+  const camsOnline = cameras.filter((c) => c.active).length;
+  const tracked = assets.filter((a) => a.tracker).length;
+  const protocolsActive = assets.filter((a) => a.protoActive).length;
+
+  const kpis: Kpi[] = analytics ? analyticsKpis(analytics) : [
+    { label: "People On Site", value: String(onSite), sub: "visitors checked in", tone: "var(--accent)", icon: Users },
     {
       label: "Open Incidents",
       value: String(openCount),
@@ -58,10 +93,10 @@ export default function DashboardPage() {
       tone: openCount ? "var(--danger)" : "var(--ok)",
       icon: TriangleAlert,
     },
-    { label: "Active Cards", value: "212", sub: "staff · visitor · vehicle", tone: "var(--info)", icon: CreditCard },
-    { label: "Cameras Online", value: "7/8", sub: "1 inactive (CAM-07)", tone: "var(--warn)", icon: Video },
-    { label: "Assets Tracked", value: "4/5", sub: "4 protocols active", tone: "var(--accent)", icon: Truck },
-    { label: "Avg Response", value: "4m", sub: "open → assigned", tone: "var(--ok)", icon: Clock },
+    { label: "Active Cards", value: String(activeCards), sub: "staff · visitor · vehicle", tone: "var(--info)", icon: CreditCard },
+    { label: "Cameras Online", value: `${camsOnline}/${cameras.length}`, sub: `${cameras.length - camsOnline} offline`, tone: "var(--warn)", icon: Video },
+    { label: "Assets Tracked", value: `${tracked}/${assets.length}`, sub: `${protocolsActive} protocols active`, tone: "var(--accent)", icon: Truck },
+    { label: "Avg Response", value: "—", sub: "open → assigned", tone: "var(--ok)", icon: Clock },
   ];
 
   const dashIncidents = incidents.filter((i) => i.status !== "resolved").slice(0, 3);
@@ -163,14 +198,9 @@ export default function DashboardPage() {
         {/* RIGHT */}
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <div className="panel" style={{ overflow: "hidden" }}>
-            <PanelHeader title="FACILITY MAP" right={<span className="panel-sub">ALPHA COMPOUND</span>} />
+            <PanelHeader title="FACILITY MAP" sub="· composite KML" right={<span className="panel-sub">ALPHA COMPOUND</span>} />
             <div style={{ padding: 14 }}>
-              <FacilityMap />
-              <div style={{ display: "flex", gap: 14, marginTop: 11, flexWrap: "wrap" }}>
-                <Legend tone="var(--accent)" round label="Access Node" />
-                <Legend tone="var(--info)" label="Camera" />
-                <Legend tone="var(--warn)" round label="Tracked Asset" />
-              </div>
+              <FacilityKmlMap height={380} showSwitcher />
             </div>
           </div>
 
@@ -224,11 +254,28 @@ export default function DashboardPage() {
   );
 }
 
-function Legend({ tone, label, round }: { tone: string; label: string; round?: boolean }) {
-  return (
-    <span className="mono" style={{ display: "flex", alignItems: "center", gap: 5, font: "500 9.5px var(--font-mono-stack)", color: "var(--muted)" }}>
-      <span style={{ width: 8, height: 8, borderRadius: round ? "50%" : 0, background: tone }} />
-      {label}
-    </span>
-  );
+// Build the 6 KPI tiles from live analytics — role-aware (facility vs personnel).
+function analyticsKpis(a: DashboardAnalytics): Kpi[] {
+  if (a.scope === "personnel") {
+    const d = a.data;
+    const mine = d.reports.assignedToMe;
+    const acms = d.assignedNodes.acms;
+    return [
+      { label: "My Open Reports", value: String(mine.open), sub: mine.open ? "assigned to you" : "none open", tone: mine.open ? "var(--danger)" : "var(--ok)", icon: TriangleAlert },
+      { label: "Investigating", value: String(mine.investigating), sub: "in progress by you", tone: "var(--warn)", icon: Clock },
+      { label: "My Nodes", value: String(d.assignedNodes.count), sub: "checkpoints you're posted to", tone: "var(--accent)", icon: MapPin },
+      { label: "My ACMs Online", value: `${acms.online}/${acms.total}`, sub: `${acms.offline} offline`, tone: acms.offline ? "var(--warn)" : "var(--ok)", icon: Cpu },
+      { label: "Checked In Today", value: String(d.visitors.checkedInToday), sub: "visitors on site", tone: "var(--info)", icon: Users },
+      { label: "Lockdown", value: d.lockdown.active ? "ACTIVE" : "CLEAR", sub: d.lockdown.active ? "facility locked down" : "normal operations", tone: d.lockdown.active ? "var(--danger)" : "var(--ok)", icon: Lock },
+    ];
+  }
+  const d = a.data;
+  return [
+    { label: "ACMs Online", value: `${d.acms.online}/${d.acms.total}`, sub: `${d.acms.offline} offline · ${d.acms.inactive} inactive`, tone: d.acms.offline ? "var(--warn)" : "var(--ok)", icon: Cpu },
+    { label: "Open Incidents", value: String(d.reports.open), sub: `${d.reports.unassigned} unassigned · ${d.reports.investigating} investigating`, tone: d.reports.open ? "var(--danger)" : "var(--ok)", icon: TriangleAlert },
+    { label: "Personnel Posted", value: `${d.personnel.assignedToNodes}/${d.personnel.total}`, sub: `${d.personnel.unassigned} unassigned`, tone: "var(--info)", icon: Users },
+    { label: "Checked In Today", value: String(d.visitors.checkedInToday), sub: "visitors on site", tone: "var(--accent)", icon: Users },
+    { label: "Appointments", value: String(d.appointments.today), sub: `${d.appointments.upcoming} upcoming`, tone: "var(--info)", icon: CalendarClock },
+    { label: "Lockdown", value: d.lockdown.active ? "ACTIVE" : "CLEAR", sub: d.lockdown.active ? "facility locked down" : "normal operations", tone: d.lockdown.active ? "var(--danger)" : "var(--ok)", icon: Lock },
+  ];
 }

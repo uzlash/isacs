@@ -18,7 +18,6 @@ const DENSITIES: Density[] = ["compact", "balanced", "spacious"];
  * before first paint so there is no flash.
  */
 export default function ClientRoot({ children }: { children: React.ReactNode }) {
-  const hydrate = useStore((s) => s.hydrate);
   const tickClock = useStore((s) => s.tickClock);
   const maybePushRandom = useStore((s) => s.maybePushRandom);
   const setTheme = useStore((s) => s.setTheme);
@@ -40,7 +39,8 @@ export default function ClientRoot({ children }: { children: React.ReactNode }) 
     } catch {
       /* localStorage unavailable */
     }
-    hydrate(Date.now());
+    // Data loading is console-scoped (see ConsoleData); ClientRoot only owns
+    // prefs/theme + the global clock so /login stays lightweight.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -50,21 +50,15 @@ export default function ClientRoot({ children }: { children: React.ReactNode }) 
   const accent = useStore((s) => s.accent);
   const liveFeed = useStore((s) => s.liveFeed);
 
+  // Keep <html> in sync with the current prefs. Persistence itself happens in
+  // the store setters (so it's immediate + page-independent); this only mirrors
+  // state → DOM, which covers the initial hydration apply too.
   useEffect(() => {
     const el = document.documentElement;
     el.setAttribute("data-theme", theme);
     el.setAttribute("data-density", density);
     if (accent) el.style.setProperty("--accent", accent);
     else el.style.removeProperty("--accent");
-    try {
-      localStorage.setItem("isacs-theme", theme);
-      localStorage.setItem("isacs-density", density);
-      if (accent) localStorage.setItem("isacs-accent", accent);
-      else localStorage.removeItem("isacs-accent");
-      localStorage.setItem("isacs-livefeed", liveFeed ? "1" : "0");
-    } catch {
-      /* ignore */
-    }
   }, [theme, density, accent, liveFeed]);
 
   // clock + live feed timers

@@ -27,6 +27,12 @@ export const API_BASE_URL =
 
 /** Absolute upstream URL — used by the server-side proxy only. */
 export const API_UPSTREAM_URL =
-  process.env.ISACS_API_UPSTREAM_URL || "https://isacs.zumalogix.com/api";
+  process.env.ISACS_API_UPSTREAM_URL || "http://192.168.18.6/api";
+
+/** Cookie names for the BFF-managed session (httpOnly access/refresh). */
+export const ACCESS_COOKIE = "isacs_at";
+export const REFRESH_COOKIE = "isacs_rt";
+/** Readable (non-httpOnly) cookie holding the current user profile JSON. */
+export const USER_COOKIE = "isacs_user";
 
 export const isLive = DATA_SOURCE === "live";

@@ -87,15 +87,38 @@ requires — without a page reload (sidebar/topbar persist across `<Link>` navig
   double-booking.
 - The **live event bus** auto-appends a plausible event every ~3.8s (toggleable).
 
-## Wiring to the real API (next phase)
+## Live API integration
 
-Data is currently seeded in-memory inside `lib/store.ts` to make the prototype live.
-Each module's reads/writes are the seam for the documented ISACS REST API
-(`../design_handoff_isacs_console/reference/ISACS_API_Reference.pdf`): replace the
-seed reads with `GET` calls and the mutating actions (`runCheck`, `escalateCam`,
-`reportBreach`, `assignIncident`, `resolveIncident`, `checkIn`, `submitSchedule`, …)
-with their corresponding endpoints, and drive the live feed from the RabbitMQ-backed
-event stream (websocket/SSE) instead of the local timer.
+`NEXT_PUBLIC_DATA_SOURCE` toggles `mock` (in-memory seed) vs `live` (real API). Live mode
+is wired end-to-end:
+
+- **BFF proxy** (`app/api/[...path]` + `app/api/auth/*`, backed by `lib/server/proxy.ts`):
+  the browser only ever calls same-origin `/api/*`; Next forwards to the upstream
+  (`ISACS_API_UPSTREAM_URL`, default `http://192.168.18.6/api`), injecting the access token
+  from an **httpOnly cookie**. This sidesteps the server's `same-origin` CORP lock and keeps
+  tokens out of JS. Upstream-down returns a clean `502`, surfaced as a banner.
+- **Auth** (`lib/api.ts` + `app/api/auth/*`): card + TOTP login (`/auth/login/card`) with the
+  first-login **MFA enrollment** flow (`/auth/mfa/setup` → `/auth/mfa/confirm`), refresh, and
+  logout. Sessions live in httpOnly cookies; a server-side guard in `(console)/layout.tsx`
+  redirects unauthenticated access to `/login`; the client auto-refreshes once on a 401.
+- **Reads** (`lib/api/resources.ts`): `loadAll()` fetches every resource in parallel and maps
+  the `{ ok, message, data, pagination }` envelope onto the view-models. `store.loadLive()`
+  populates the store; views are unchanged.
+- **Writes** (`lib/api/mutations.ts`): each store action branches on `isLive` to call the
+  endpoint (check-in, assign/resolve, `/access/check`, camera escalate, asset breach, protocol
+  activate/deactivate, create appointment), refetching `/reports` after server-side
+  escalations so the ASRS badge/list stay in sync.
+
+**Assumptions to verify against real data** (localized, easy to fix):
+- Reports carry no `severity`/location/`log` — severity is derived from `source`, location
+  uses `sourceRef`, the timeline is synthesized. `/access/check` sends the single credential
+  as all three identifier types. Appointment times are built from the modal's `HH:MM` + duration.
+- **Card holder + node list** aren't on `GET /cards` — shown as placeholders pending a
+  per-card assignment lookup.
+- **Settings keys** are facility-defined; reads fuzzy-match, and writes are currently
+  local-only (not persisted) until the real keys are confirmed.
+- No event stream exists in the REST API (MQTT is server↔device), so the live event bus
+  reflects console-initiated actions only; it is not a real-time feed.
 
 ## Known gaps (from the handoff, intentionally not yet built)
 
