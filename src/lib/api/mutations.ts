@@ -20,6 +20,11 @@ export async function checkInVisitor(id: string): Promise<Visitor> {
   return mapVisitor(data);
 }
 
+export async function checkOutVisitor(id: string): Promise<Visitor> {
+  const { data } = await api.post<ApiVisitor>(`/visitors/${id}/checkout`);
+  return mapVisitor(data);
+}
+
 // ---- ASRS reports ----
 export interface CreateReportInput {
   source: "access-control" | "surveillance" | "assets" | "lockdown" | "manual";
@@ -86,6 +91,9 @@ export interface CreateAppointmentInput {
   scheduledAt: string;
   endsAt: string;
   purpose?: string;
+  /** Nodes picked at booking time; the card isn't minted/assigned until
+   *  check-in — see requestedAccessNodeIds on the returned appointment. */
+  requestedAccessNodeIds?: string[];
 }
 export async function createAppointment(input: CreateAppointmentInput): Promise<void> {
   await api.post("/appointments", input);

@@ -23,14 +23,14 @@ const MIN = 60_000;
 const HOUR = 3_600_000;
 
 export const seedStaff = (): Staff[] => [
-  { id: "s1", staffId: "E-1001", name: "Cmdr. R. Okafor", dept: "Command", desig: "Facility Commander", phone: "+1 202 555 0118", email: "r.okafor@alpha.mil" },
-  { id: "s2", staffId: "E-1042", name: "Lt. M. Vasquez", dept: "Security", desig: "Security Manager", phone: "+1 202 555 0142", email: "m.vasquez@alpha.mil" },
-  { id: "s3", staffId: "E-1067", name: "Sgt. D. Park", dept: "Security", desig: "Gate Officer", phone: "+1 202 555 0167", email: "d.park@alpha.mil" },
-  { id: "s4", staffId: "E-1088", name: "Cpl. A. Bauer", dept: "Security", desig: "Patrol Officer", phone: "+1 202 555 0188", email: "a.bauer@alpha.mil" },
-  { id: "s5", staffId: "E-1103", name: "H. Tanaka", dept: "Operations", desig: "Facilities Lead", phone: "+1 202 555 0203", email: "h.tanaka@alpha.mil" },
-  { id: "s6", staffId: "E-1119", name: "J. Mbeki", dept: "IT", desig: "Systems Engineer", phone: "+1 202 555 0219", email: "j.mbeki@alpha.mil" },
-  { id: "s7", staffId: "E-1130", name: "Dr. L. Ferran", dept: "Research", desig: "Lab Director", phone: "+1 202 555 0230", email: "l.ferran@alpha.mil" },
-  { id: "s8", staffId: "E-1155", name: "P. Nilsson", dept: "Logistics", desig: "Fleet Coordinator", phone: "+1 202 555 0255", email: "p.nilsson@alpha.mil" },
+  { id: "s1", staffId: "E-1001", name: "Cmdr. R. Okafor", dept: "Command", desig: "Facility Commander", phone: "+1 202 555 0118", email: "r.okafor@alpha.mil", pictureUrl: null },
+  { id: "s2", staffId: "E-1042", name: "Lt. M. Vasquez", dept: "Security", desig: "Security Manager", phone: "+1 202 555 0142", email: "m.vasquez@alpha.mil", pictureUrl: null },
+  { id: "s3", staffId: "E-1067", name: "Sgt. D. Park", dept: "Security", desig: "Gate Officer", phone: "+1 202 555 0167", email: "d.park@alpha.mil", pictureUrl: null },
+  { id: "s4", staffId: "E-1088", name: "Cpl. A. Bauer", dept: "Security", desig: "Patrol Officer", phone: "+1 202 555 0188", email: "a.bauer@alpha.mil", pictureUrl: null },
+  { id: "s5", staffId: "E-1103", name: "H. Tanaka", dept: "Operations", desig: "Facilities Lead", phone: "+1 202 555 0203", email: "h.tanaka@alpha.mil", pictureUrl: null },
+  { id: "s6", staffId: "E-1119", name: "J. Mbeki", dept: "IT", desig: "Systems Engineer", phone: "+1 202 555 0219", email: "j.mbeki@alpha.mil", pictureUrl: null },
+  { id: "s7", staffId: "E-1130", name: "Dr. L. Ferran", dept: "Research", desig: "Lab Director", phone: "+1 202 555 0230", email: "l.ferran@alpha.mil", pictureUrl: null },
+  { id: "s8", staffId: "E-1155", name: "P. Nilsson", dept: "Logistics", desig: "Fleet Coordinator", phone: "+1 202 555 0255", email: "p.nilsson@alpha.mil", pictureUrl: null },
 ];
 
 export const seedUsers = (): User[] => [
@@ -43,21 +43,21 @@ export const seedUsers = (): User[] => [
 ];
 
 export const seedVisitors = (now: number): Visitor[] => [
-  { id: "v1", name: "C. Rourke", org: "Meridian Defense", desig: "Account Rep", email: "c.rourke@meridian.com", phone: "+1 415 555 0911", checkedIn: now - MIN * 38 },
-  { id: "v2", name: "S. Adeyemi", org: "Gridline Power", desig: "Field Engineer", email: "s.adeyemi@gridline.io", phone: "+1 415 555 0922", checkedIn: now - MIN * 92 },
-  { id: "v3", name: "T. Wallace", org: "Audit & Co.", desig: "Compliance Auditor", email: "t.wallace@auditco.com", phone: "+1 415 555 0933", checkedIn: null },
-  { id: "v4", name: "M. Ito", org: "Sakura Robotics", desig: "Solutions Architect", email: "m.ito@sakura.jp", phone: "+1 415 555 0944", checkedIn: now - MIN * 15 },
-  { id: "v5", name: "F. Kowalski", org: "NorthBridge", desig: "Logistics", email: "f.k@northbridge.co", phone: "+1 415 555 0955", checkedIn: null },
-  { id: "v6", name: "R. Singh", org: "Helix Medical", desig: "Inspector", email: "r.singh@helix.med", phone: "+1 415 555 0966", checkedIn: now - MIN * 120 },
+  { id: "v1", name: "C. Rourke", org: "Meridian Defense", desig: "Account Rep", email: "c.rourke@meridian.com", phone: "+1 415 555 0911", pictureUrl: null, checkedIn: now - MIN * 38, checkedOut: null },
+  { id: "v2", name: "S. Adeyemi", org: "Gridline Power", desig: "Field Engineer", email: "s.adeyemi@gridline.io", phone: "+1 415 555 0922", pictureUrl: null, checkedIn: now - MIN * 92, checkedOut: null },
+  { id: "v3", name: "T. Wallace", org: "Audit & Co.", desig: "Compliance Auditor", email: "t.wallace@auditco.com", phone: "+1 415 555 0933", pictureUrl: null, checkedIn: null, checkedOut: null },
+  { id: "v4", name: "M. Ito", org: "Sakura Robotics", desig: "Solutions Architect", email: "m.ito@sakura.jp", phone: "+1 415 555 0944", pictureUrl: null, checkedIn: now - MIN * 15, checkedOut: null },
+  { id: "v5", name: "F. Kowalski", org: "NorthBridge", desig: "Logistics", email: "f.k@northbridge.co", phone: "+1 415 555 0955", pictureUrl: null, checkedIn: now - HOUR * 26, checkedOut: now - HOUR * 24 },
+  { id: "v6", name: "R. Singh", org: "Helix Medical", desig: "Inspector", email: "r.singh@helix.med", phone: "+1 415 555 0966", pictureUrl: null, checkedIn: now - MIN * 120, checkedOut: null },
 ];
 
 export const seedAppointments = (now: number): Appointment[] => [
-  { id: "a1", visitor: "C. Rourke", host: "Lt. M. Vasquez", start: now - HOUR * 0.6, end: now + HOUR * 0.4, status: "active", purpose: "Contract review" },
-  { id: "a2", visitor: "M. Ito", host: "J. Mbeki", start: now - HOUR * 0.25, end: now + HOUR * 0.75, status: "active", purpose: "Systems integration" },
-  { id: "a3", visitor: "T. Wallace", host: "Cmdr. R. Okafor", start: now + HOUR * 1.5, end: now + HOUR * 2.5, status: "scheduled", purpose: "Quarterly compliance audit" },
-  { id: "a4", visitor: "F. Kowalski", host: "P. Nilsson", start: now + HOUR * 3, end: now + HOUR * 4, status: "scheduled", purpose: "Delivery coordination" },
-  { id: "a5", visitor: "R. Singh", host: "Dr. L. Ferran", start: now + HOUR * 5, end: now + HOUR * 6, status: "postponed", purpose: "Lab equipment inspection" },
-  { id: "a6", visitor: "S. Adeyemi", host: "H. Tanaka", start: now - HOUR * 26, end: now - HOUR * 25, status: "cancelled", purpose: "Grid maintenance — cancelled (weather)" },
+  { id: "a1", visitor: "C. Rourke", visitorId: "v1", host: "Lt. M. Vasquez", start: now - HOUR * 0.6, end: now + HOUR * 0.4, status: "active", purpose: "Contract review", requestedAccessNodeIds: ["n2", "n3"] },
+  { id: "a2", visitor: "M. Ito", visitorId: "v4", host: "J. Mbeki", start: now - HOUR * 0.25, end: now + HOUR * 0.75, status: "active", purpose: "Systems integration", requestedAccessNodeIds: ["n2", "n4"] },
+  { id: "a3", visitor: "T. Wallace", visitorId: "v3", host: "Cmdr. R. Okafor", start: now + HOUR * 1.5, end: now + HOUR * 2.5, status: "scheduled", purpose: "Quarterly compliance audit", requestedAccessNodeIds: ["n2"] },
+  { id: "a4", visitor: "F. Kowalski", visitorId: "v5", host: "P. Nilsson", start: now + HOUR * 3, end: now + HOUR * 4, status: "scheduled", purpose: "Delivery coordination", requestedAccessNodeIds: ["n6", "n7"] },
+  { id: "a5", visitor: "R. Singh", visitorId: "v6", host: "Dr. L. Ferran", start: now + HOUR * 5, end: now + HOUR * 6, status: "postponed", purpose: "Lab equipment inspection", requestedAccessNodeIds: ["n2"] },
+  { id: "a6", visitor: "S. Adeyemi", visitorId: "v2", host: "H. Tanaka", start: now - HOUR * 26, end: now - HOUR * 25, status: "cancelled", purpose: "Grid maintenance — cancelled (weather)", requestedAccessNodeIds: [] },
 ];
 
 export const seedNodes = (): AccessNode[] => [
@@ -73,12 +73,12 @@ export const seedNodes = (): AccessNode[] => [
 ];
 
 export const seedCards = (): AccessCard[] => [
-  { id: "c1", num: "CARD-00231", rfid: "RFID-8841", qr: null, type: "staff", active: true, holder: "Sgt. D. Park", nodes: ["n1", "n2"] },
-  { id: "c2", num: "CARD-00232", rfid: "RFID-8842", qr: null, type: "staff", active: true, holder: "J. Mbeki", nodes: ["n1", "n8", "n9"] },
-  { id: "c3", num: "CARD-00233", rfid: null, qr: "QR-VIS-7741", type: "visitor", active: true, holder: "M. Ito", nodes: ["n3"] },
-  { id: "c4", num: "CARD-00234", rfid: null, qr: "QR-VIS-7742", type: "visitor", active: true, holder: "C. Rourke", nodes: ["n2"] },
-  { id: "c5", num: "CARD-00235", rfid: "RFID-8845", qr: null, type: "vehicle", active: true, holder: "Patrol Unit 4", nodes: ["n1", "n6", "n7"] },
-  { id: "c6", num: "CARD-00236", rfid: "RFID-8846", qr: null, type: "staff", active: false, holder: "— (deactivated)", nodes: [] },
+  { id: "c1", num: "CARD-00231", rfid: "RFID-8841", qr: null, type: "staff", active: true, holder: "Sgt. D. Park", holderType: "staff", holderId: "s3", nodes: ["n1", "n2"] },
+  { id: "c2", num: "CARD-00232", rfid: "RFID-8842", qr: null, type: "staff", active: true, holder: "J. Mbeki", holderType: "staff", holderId: "s6", nodes: ["n1", "n8", "n9"] },
+  { id: "c3", num: "CARD-00233", rfid: null, qr: "QR-VIS-7741", type: "visitor", active: true, holder: "M. Ito", holderType: "visitor", holderId: "v4", nodes: ["n3"] },
+  { id: "c4", num: "CARD-00234", rfid: null, qr: "QR-VIS-7742", type: "visitor", active: true, holder: "C. Rourke", holderType: "visitor", holderId: "v1", nodes: ["n2"] },
+  { id: "c5", num: "CARD-00235", rfid: "RFID-8845", qr: null, type: "vehicle", active: true, holder: "Patrol Unit 4", holderType: "asset", holderId: "as1", nodes: ["n1", "n6", "n7"] },
+  { id: "c6", num: "CARD-00236", rfid: "RFID-8846", qr: null, type: "staff", active: false, holder: "— (deactivated)", holderType: null, holderId: null, nodes: [] },
 ];
 
 export const seedCameras = (now: number): Camera[] => (

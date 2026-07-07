@@ -18,6 +18,7 @@ import {
 import { openIncidentCount, useStore } from "@/lib/store";
 import { isLive } from "@/lib/config";
 import { rel } from "@/lib/format";
+import { isVisitorOnSite } from "@/lib/types";
 import { getDashboardAnalytics, type DashboardAnalytics } from "@/lib/api/analytics";
 import { PanelHeader, SevPill } from "@/components/ui";
 import FacilityKmlMap from "@/components/map/FacilityKmlMap";
@@ -78,7 +79,7 @@ export default function DashboardPage() {
   }, []);
 
   const openCount = openIncidentCount(incidents);
-  const onSite = visitors.filter((v) => v.checkedIn).length;
+  const onSite = visitors.filter(isVisitorOnSite).length;
   const activeCards = cards.filter((c) => c.active).length;
   const camsOnline = cameras.filter((c) => c.active).length;
   const tracked = assets.filter((a) => a.tracker).length;

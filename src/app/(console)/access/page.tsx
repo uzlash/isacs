@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Play, Link2, Power, Trash2 } from "lucide-react";
+import { Plus, Play, Link2, Power, ScanLine, Trash2 } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { cardTypeTone, rel } from "@/lib/format";
 import { PanelHeader } from "@/components/ui";
@@ -9,6 +9,7 @@ import LockdownPanel from "@/components/LockdownPanel";
 import NodeWizard from "@/components/NodeWizard";
 import NodeInspector from "@/components/NodeInspector";
 import CardModal from "@/components/CardModal";
+import IdentifyCardModal from "@/components/IdentifyCardModal";
 import { useLockdown } from "@/lib/useLockdown";
 import { useSessionUser } from "@/lib/auth";
 import { createCard, deactivateCard, deleteCard } from "@/lib/api/cards";
@@ -40,6 +41,7 @@ export default function AccessPage() {
   const refreshCards = useStore((s) => s.refreshCards);
 
   const [showNewCard, setShowNewCard] = useState(false);
+  const [showIdentify, setShowIdentify] = useState(false);
   const [assignCardTarget, setAssignCardTarget] = useState<AccessCard | null>(null);
 
   const { active, history, refresh: refreshLockdown } = useLockdown();
@@ -167,6 +169,9 @@ export default function AccessPage() {
           <span className="panel-title">ACCESS CARDS · {cards.length} REGISTERED</span>
           <span className="panel-sub">· assign to a holder · run a live checkpoint check</span>
           <div style={{ flex: 1 }} />
+          <button onClick={() => setShowIdentify(true)} className="btn" style={{ font: "600 9.5px var(--font-mono-stack)", letterSpacing: ".5px", padding: "6px 11px", display: "flex", alignItems: "center", gap: 5 }}>
+            <ScanLine size={12} strokeWidth={2.4} /> IDENTIFY CARD
+          </button>
           {canWriteCards && (
             <button onClick={() => setShowNewCard(true)} className="btn-accent" style={{ font: "600 9.5px var(--font-mono-stack)", letterSpacing: ".5px", padding: "6px 11px", display: "flex", alignItems: "center", gap: 5 }}>
               <Plus size={12} strokeWidth={2.6} /> NEW CARD
@@ -252,6 +257,8 @@ export default function AccessPage() {
           }}
         />
       )}
+
+      {showIdentify && <IdentifyCardModal onClose={() => setShowIdentify(false)} />}
 
       {showWizard && (
         <NodeWizard

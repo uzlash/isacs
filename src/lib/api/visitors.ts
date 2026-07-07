@@ -7,8 +7,8 @@
 //   GET    /visitors/:id      single (rich: appointments[] + cardAssignments[])
 //   PUT    /visitors/:id      update
 //   DELETE /visitors/:id      remove (409 if active card / upcoming appointment)
-// Check-in (POST /visitors/:id/checkin) lives in mutations.ts as
-// checkInVisitor — not duplicated here.
+// Check-in/out (POST /visitors/:id/checkin, /checkout) live in mutations.ts
+// as checkInVisitor / checkOutVisitor — not duplicated here.
 // ====================================================================
 
 import { api } from "@/lib/api";
@@ -29,6 +29,7 @@ export interface ApiVisitorFull {
   placeOfWork: string | null;
   pictureUrl: string | null;
   checkedInAt: string | null;
+  checkedOutAt: string | null;
   createdAt: string;
   updatedAt: string;
   appointments: {
@@ -43,6 +44,10 @@ export interface ApiVisitorFull {
       designation: string | null;
       department: string | null;
     };
+    /** Nodes picked at booking time — the card isn't minted/assigned until
+     *  check-in, which reads this list instead of asking the checker-in to
+     *  re-pick. */
+    requestedAccessNodeIds?: string[];
   }[];
   cardAssignments: {
     id: string;

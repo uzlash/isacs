@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { Pencil, Plus, Trash2, Upload, Users } from "lucide-react";
+import { Eye, Pencil, Plus, Trash2, Upload, Users } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { useSessionUser } from "@/lib/auth";
 import { initials } from "@/lib/format";
 import ImageUpload from "@/components/ImageUpload";
+import StaffDetailModal from "@/components/StaffDetailModal";
 import {
   bulkStaff,
   createStaff,
@@ -21,6 +22,7 @@ const WRITE_ROLES = ["super_admin", "security_manager", "staff_admin"];
 type Modal =
   | { kind: "create" }
   | { kind: "edit"; staff: Staff }
+  | { kind: "detail"; staff: Staff }
   | { kind: "bulk" };
 
 export default function StaffPage() {
@@ -72,8 +74,13 @@ export default function StaffPage() {
           staff.map((s) => (
             <div key={s.id} style={{ display: "grid", gridTemplateColumns: COLS, gap: 10, padding: "11px 16px", borderBottom: "1px solid var(--border)", alignItems: "center" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <div className="mono" style={{ width: 30, height: 30, borderRadius: 7, background: "var(--panel3)", border: "1px solid var(--border2)", display: "flex", alignItems: "center", justifyContent: "center", font: "600 10px var(--font-mono-stack)", color: "var(--accent)" }}>
-                  {initials(s.name)}
+                <div className="mono" style={{ width: 30, height: 30, borderRadius: 7, background: "var(--panel3)", border: "1px solid var(--border2)", display: "flex", alignItems: "center", justifyContent: "center", font: "600 10px var(--font-mono-stack)", color: "var(--accent)", overflow: "hidden" }}>
+                  {s.pictureUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={s.pictureUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  ) : (
+                    initials(s.name)
+                  )}
                 </div>
                 <span style={{ font: "600 12.5px var(--font-sans-stack)", color: "var(--fg)" }}>{s.name}</span>
               </div>
@@ -82,6 +89,7 @@ export default function StaffPage() {
               <span style={{ font: "500 12px var(--font-sans-stack)", color: "var(--muted)" }}>{s.desig}</span>
               <span className="mono" style={{ font: "500 9.5px var(--font-mono-stack)", color: "var(--faint)" }}>{s.email}</span>
               <span style={{ display: "flex", gap: 5, justifyContent: "flex-end", flexWrap: "wrap" }}>
+                <IconBtn onClick={() => setModal({ kind: "detail", staff: s })} title="View details"><Eye size={12} strokeWidth={1.9} /></IconBtn>
                 {canWrite && (
                   <>
                     <IconBtn onClick={() => setModal({ kind: "edit", staff: s })} title="Edit"><Pencil size={12} strokeWidth={1.9} /></IconBtn>
@@ -111,6 +119,10 @@ export default function StaffPage() {
           onDone={() => refresh()}
         />
       )}
+
+      {modal?.kind === "detail" && (
+        <StaffDetailModal staff={modal.staff} onClose={() => setModal(null)} />
+      )}
     </div>
   );
 }
@@ -124,7 +136,7 @@ function StaffForm({ staff, onClose, onSaved }: { staff?: Staff; onClose: () => 
   const [phone, setPhone] = useState(staff?.phone ?? "");
   const [designation, setDesignation] = useState(staff?.desig ?? "");
   const [department, setDepartment] = useState(staff?.dept ?? "");
-  const [pictureUrl, setPictureUrl] = useState<string | null>(null);
+  const [pictureUrl, setPictureUrl] = useState<string | null>(staff?.pictureUrl ?? null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -184,7 +196,7 @@ function StaffForm({ staff, onClose, onSaved }: { staff?: Staff; onClose: () => 
       <Field label="DEPARTMENT">
         <input className="input" value={department} onChange={(e) => setDepartment(e.target.value)} placeholder="e.g. Operations" />
       </Field>
-      <ImageUpload purpose="staff-picture" value={null} onChange={setPictureUrl} label="PROFILE PHOTO (OPTIONAL)" />
+      <ImageUpload purpose="staff-picture" value={staff?.pictureUrl ?? null} onChange={setPictureUrl} label="PROFILE PHOTO (OPTIONAL)" />
       {error && <Err>{error}</Err>}
       <button onClick={submit} disabled={busy} className="btn-accent" style={{ width: "100%", height: 42, font: "600 11.5px var(--font-mono-stack)", letterSpacing: ".6px", opacity: busy ? 0.7 : 1 }}>
         {busy ? "SAVING…" : editing ? "SAVE CHANGES" : "CREATE STAFF"}

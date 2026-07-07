@@ -41,13 +41,15 @@ import {
   accessCheck,
   assignReport,
   checkInVisitor,
-  createAppointment,
+  checkOutVisitor,
   escalateCamera,
   putSetting,
   reportAssetBreach,
   resolveReport,
   setAssetProtocol,
 } from "./api/mutations";
+import { getVisitor } from "./api/visitors";
+import { revokeCard } from "./api/access";
 import { USER_COOKIE, isLive } from "./config";
 import { connectEvents, type EventStream, type IsacsEvent } from "./events";
 import { isBbiwReport, isClipUrl, parseBbiwDescription } from "./api/bbiw";
@@ -69,14 +71,6 @@ import type {
   User,
   Visitor,
 } from "./types";
-
-interface ScheduleForm {
-  host: string;
-  visitor: string;
-  date: string;
-  dur: number;
-  error: string;
-}
 
 interface State {
   ready: boolean;
@@ -121,8 +115,6 @@ interface State {
 
   // directory
   visitorSearch: string;
-  showSchedule: boolean;
-  schedule: ScheduleForm;
 
   // ---- actions ----
   hydrate: (now: number) => void;
@@ -157,6 +149,8 @@ interface State {
   resolveIncident: (id: string) => void;
 
   checkIn: (id: string) => void;
+  checkOut: (id: string) => void;
+  revokeVisitorAccess: (visitorId: string) => void;
   setVisitorSearch: (s: string) => void;
 
   toggleNode: (id: string) => void;
@@ -169,11 +163,6 @@ interface State {
   toggleProto: (id: string) => void;
   reportBreach: (id: string) => void;
   escalateCam: (id: string) => void;
-
-  openSchedule: () => void;
-  closeSchedule: () => void;
-  setSched: (k: keyof ScheduleForm, v: string | number) => void;
-  submitSchedule: () => void;
 
   setSetting: <K extends keyof Settings>(k: K, v: Settings[K]) => void;
   saveSettings: () => Promise<{ ok: boolean; error?: string }>;
@@ -394,9 +383,6 @@ export const useStore = create<State>((set, get) => {
     failedTries: {},
 
     visitorSearch: "",
-    showSchedule: false,
-    schedule: { host: "", visitor: "", date: "", dur: 60, error: "" },
-
     hydrate: (now) => {
       if (get().ready) return;
       set({
@@ -654,6 +640,41 @@ export const useStore = create<State>((set, get) => {
       }));
       logEvent("VISITOR", t.name + " checked in · permanent timestamp recorded", "var(--info)");
     },
+
+    checkOut: async (id) => {
+      const t = get().visitors.find((x) => x.id === id);
+      if (!t) return;
+      if (isLive) {
+        try {
+          const updated = await checkOutVisitor(id);
+          set((s) => ({ visitors: s.visitors.map((v) => (v.id === id ? updated : v)) }));
+          logEvent("VISITOR", t.name + " checked out", "var(--muted)");
+        } catch (e) {
+          logEvent("VISITOR", "Check-out failed · " + errMsg(e), "var(--danger)");
+        }
+        return;
+      }
+      set((s) => ({
+        visitors: s.visitors.map((v) => (v.id === id ? { ...v, checkedOut: Date.now() } : v)),
+      }));
+      logEvent("VISITOR", t.name + " checked out", "var(--muted)");
+    },
+
+    // Best-effort — strips the visitor's active card assignment (e.g. their
+    // appointment was cancelled/postponed). Never throws: a revoke failure
+    // shouldn't block the cancel/postpone it's cleaning up after.
+    revokeVisitorAccess: async (visitorId) => {
+      if (!isLive) return;
+      try {
+        const full = await getVisitor(visitorId);
+        const active = full.cardAssignments.find((a) => a.revokedAt == null);
+        if (!active) return;
+        await revokeCard(active.card.id);
+        logEvent("VISITOR", full.name + "'s card access revoked", "var(--muted)");
+      } catch (e) {
+        logEvent("VISITOR", "Access revoke failed · " + errMsg(e), "var(--danger)");
+      }
+    },
     setVisitorSearch: (visitorSearch) => set({ visitorSearch }),
 
     toggleNode: (id) =>
@@ -879,68 +900,6 @@ export const useStore = create<State>((set, get) => {
       set((s) => ({ incidents: [incident, ...s.incidents] }));
       logEvent("SURVEIL", cam.name + " escalated to ASRS · snapshot attached", "var(--danger)");
       logEvent("ASRS", "Incident " + iid + " created from camera observation", "var(--danger)");
-    },
-
-    openSchedule: () =>
-      set({
-        showSchedule: true,
-        schedule: { host: "Lt. M. Vasquez", visitor: "T. Wallace", date: "14:30", dur: 60, error: "" },
-      }),
-    closeSchedule: () => set({ showSchedule: false }),
-    setSched: (k, v) =>
-      set((s) => ({ schedule: { ...s.schedule, [k]: v, error: "" } as ScheduleForm })),
-    submitSchedule: async () => {
-      const s = get().schedule;
-      const maxDur = get().settings.maxApptDuration;
-      // client-side pre-check for instant feedback (server enforces authoritatively)
-      if (s.dur > maxDur) {
-        set((st) => ({ schedule: { ...st.schedule, error: "Duration exceeds facility limit (" + maxDur + " min)" } }));
-        return;
-      }
-
-      if (isLive) {
-        const hostStaffId = get().staff.find((x) => x.name === s.host)?.id;
-        const visitorId = get().visitors.find((x) => x.name === s.visitor)?.id;
-        if (!hostStaffId || !visitorId) {
-          set((st) => ({ schedule: { ...st.schedule, error: "Select a valid host and visitor" } }));
-          return;
-        }
-        // build ISO window from the HH:MM time (today, or tomorrow if already past)
-        const start = new Date();
-        const m = /^(\d{1,2}):(\d{2})$/.exec(s.date.trim());
-        if (m) {
-          start.setHours(Number(m[1]), Number(m[2]), 0, 0);
-          if (start.getTime() < Date.now()) start.setDate(start.getDate() + 1);
-        } else {
-          start.setTime(Date.now() + 5 * 60000);
-        }
-        const end = new Date(start.getTime() + s.dur * 60000);
-        try {
-          await createAppointment({
-            hostStaffId,
-            visitorId,
-            scheduledAt: start.toISOString(),
-            endsAt: end.toISOString(),
-          });
-          try {
-            set({ appointments: await fetchAppointments() });
-          } catch {
-            /* list refreshes on next load */
-          }
-          logEvent("APPT", "Appointment booked · " + s.visitor + " ↔ " + s.host + " · host notified by email", "var(--accent)");
-          set({ showSchedule: false });
-        } catch (e) {
-          set((st) => ({ schedule: { ...st.schedule, error: errMsg(e) } }));
-        }
-        return;
-      }
-
-      if (s.host === "Lt. M. Vasquez" && s.date === "14:30") {
-        set((st) => ({ schedule: { ...st.schedule, error: "Host double-booked — Lt. Vasquez has an overlapping appointment" } }));
-        return;
-      }
-      logEvent("APPT", "Appointment booked · " + s.visitor + " ↔ " + s.host + " · host notified by email", "var(--accent)");
-      set({ showSchedule: false });
     },
 
     setSetting: (k, v) =>

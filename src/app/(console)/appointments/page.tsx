@@ -5,6 +5,7 @@ import { useStore } from "@/lib/store";
 import { useSessionUser } from "@/lib/auth";
 import { statusTone } from "@/lib/format";
 import { cancelAppointment, postponeAppointment } from "@/lib/api/mutations";
+import NewAppointmentWizard from "@/components/NewAppointmentWizard";
 import type { Appointment } from "@/lib/types";
 
 const COLS = "1.4fr 1.4fr 1fr 1.6fr 110px 120px";
@@ -19,18 +20,11 @@ function fmtDay(ms: number) {
 
 export default function AppointmentsPage() {
   const appts = useStore((s) => s.appointments);
-  const staff = useStore((s) => s.staff);
-  const visitors = useStore((s) => s.visitors);
   const settings = useStore((s) => s.settings);
-  const show = useStore((s) => s.showSchedule);
-  const schedule = useStore((s) => s.schedule);
-  const open = useStore((s) => s.openSchedule);
-  const close = useStore((s) => s.closeSchedule);
-  const setSched = useStore((s) => s.setSched);
-  const submit = useStore((s) => s.submitSchedule);
 
   const user = useSessionUser();
   const canWrite = !!user && WRITE_ROLES.includes(user.role);
+  const [showWizard, setShowWizard] = useState(false);
   const [modal, setModal] = useState<
     | { kind: "cancel"; appt: Appointment }
     | { kind: "postpone"; appt: Appointment }
@@ -45,7 +39,7 @@ export default function AppointmentsPage() {
         </span>
         <div style={{ flex: 1 }} />
         <button
-          onClick={open}
+          onClick={() => setShowWizard(true)}
           className="btn-accent"
           style={{ font: "600 10.5px var(--font-mono-stack)", letterSpacing: ".5px", padding: "9px 16px" }}
         >
@@ -89,63 +83,7 @@ export default function AppointmentsPage() {
         ))}
       </div>
 
-      {/* SCHEDULE MODAL */}
-      {show && (
-        <div
-          onClick={close}
-          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{ width: 440, background: "var(--panel)", border: "1px solid var(--border2)", borderRadius: 13, boxShadow: "0 20px 60px rgba(0,0,0,.5)", overflow: "hidden" }}
-          >
-            <div style={{ padding: "16px 18px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center" }}>
-              <span style={{ font: "600 13px var(--font-sans-stack)", color: "var(--fg)" }}>Schedule Appointment</span>
-              <div style={{ flex: 1 }} />
-              <button onClick={close} style={{ background: "none", border: "none", color: "var(--faint)", fontSize: 18, cursor: "pointer" }}>×</button>
-            </div>
-            <div style={{ padding: 18, display: "flex", flexDirection: "column", gap: 13 }}>
-              <div>
-                <div className="field-label" style={{ marginBottom: 5 }}>VISITOR</div>
-                <select className="select" value={schedule.visitor} onChange={(e) => setSched("visitor", e.target.value)}>
-                  {visitors.map((v) => (
-                    <option key={v.id} value={v.name}>{v.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <div className="field-label" style={{ marginBottom: 5 }}>HOST (STAFF)</div>
-                <select className="select" value={schedule.host} onChange={(e) => setSched("host", e.target.value)}>
-                  {staff.map((s) => (
-                    <option key={s.id} value={s.name}>{s.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 11 }}>
-                <div>
-                  <div className="field-label" style={{ marginBottom: 5 }}>TIME</div>
-                  <input className="input mono" style={{ font: "500 12px var(--font-mono-stack)" }} value={schedule.date} onChange={(e) => setSched("date", e.target.value)} placeholder="14:30" />
-                </div>
-                <div>
-                  <div className="field-label" style={{ marginBottom: 5 }}>DURATION (MIN)</div>
-                  <input className="input mono" style={{ font: "500 12px var(--font-mono-stack)" }} type="number" value={schedule.dur} onChange={(e) => setSched("dur", Number(e.target.value))} />
-                </div>
-              </div>
-              {schedule.error && (
-                <div style={{ font: "500 11px var(--font-sans-stack)", color: "var(--danger)", background: "var(--panel2)", border: "1px solid var(--danger)", borderRadius: 7, padding: "9px 11px" }}>
-                  ⚠ {schedule.error}
-                </div>
-              )}
-              <button onClick={submit} className="btn-accent" style={{ width: "100%", height: 42, font: "600 11.5px var(--font-mono-stack)", letterSpacing: ".6px", marginTop: 2 }}>
-                CONFIRM BOOKING
-              </button>
-              <div className="mono" style={{ font: "500 9.5px var(--font-mono-stack)", color: "var(--faint)", textAlign: "center" }}>
-                Host receives email notification automatically
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {showWizard && <NewAppointmentWizard onClose={() => setShowWizard(false)} />}
 
       {modal?.kind === "cancel" && (
         <CancelModal
@@ -184,6 +122,7 @@ function CancelModal({ appt, onClose, onDone }: { appt: Appointment; onClose: ()
     setError("");
     try {
       await cancelAppointment(appt.id, reason.trim());
+      await useStore.getState().revokeVisitorAccess(appt.visitorId);
       await onDone();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to cancel appointment");
@@ -231,6 +170,7 @@ function PostponeModal({ appt, onClose, onDone }: { appt: Appointment; onClose: 
     setError("");
     try {
       await postponeAppointment(appt.id, new Date(start).toISOString(), new Date(end).toISOString(), reason.trim());
+      await useStore.getState().revokeVisitorAccess(appt.visitorId);
       await onDone();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to postpone appointment");

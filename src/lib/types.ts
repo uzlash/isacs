@@ -34,6 +34,7 @@ export interface Staff {
   desig: string;
   phone: string;
   email: string;
+  pictureUrl: string | null;
 }
 
 export interface User {
@@ -58,9 +59,15 @@ export interface Visitor {
   desig: string;
   email: string;
   phone: string;
-  /** epoch ms of check-in, or null if not on site */
+  pictureUrl: string | null;
+  /** epoch ms of most recent check-in, or null if never checked in */
   checkedIn: number | null;
+  /** epoch ms of most recent check-out, or null if never checked out */
+  checkedOut: number | null;
 }
+
+export const isVisitorOnSite = (v: Pick<Visitor, "checkedIn" | "checkedOut">): boolean =>
+  v.checkedIn != null && (v.checkedOut == null || v.checkedOut < v.checkedIn);
 
 export type ApptStatus =
   | "scheduled"
@@ -72,11 +79,15 @@ export type ApptStatus =
 export interface Appointment {
   id: string;
   visitor: string;
+  visitorId: string;
   host: string;
   start: number;
   end: number;
   status: ApptStatus;
   purpose: string;
+  /** Nodes the creator decided the visitor should get, picked at booking
+   *  time. The actual card isn't assigned until check-in. */
+  requestedAccessNodeIds: string[];
 }
 
 export interface AccessNode {
@@ -100,6 +111,10 @@ export interface AccessCard {
   type: CardType;
   active: boolean;
   holder: string;
+  /** Raw holder identity behind the resolved `holder` display name, from the
+   *  card's active (non-revoked) assignment — null if unassigned. */
+  holderType: "staff" | "visitor" | "asset" | null;
+  holderId: string | null;
   nodes: string[];
 }
 

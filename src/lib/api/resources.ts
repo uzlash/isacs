@@ -38,6 +38,7 @@ interface ApiStaff {
   phone?: string | null;
   designation?: string | null;
   department?: string | null;
+  pictureUrl?: string | null;
 }
 interface ApiUser {
   id: string;
@@ -55,7 +56,9 @@ export interface ApiVisitor {
   phone?: string | null;
   designation?: string | null;
   placeOfWork?: string | null;
+  pictureUrl?: string | null;
   checkedInAt?: string | null;
+  checkedOutAt?: string | null;
 }
 interface ApiAppointment {
   id: string;
@@ -65,6 +68,7 @@ interface ApiAppointment {
   status: ApptStatus;
   host?: { id: string; name: string } | null;
   visitor?: { id: string; name: string } | null;
+  requestedAccessNodeIds?: string[];
 }
 interface ApiNode {
   id: string;
@@ -145,6 +149,7 @@ const mapStaff = (s: ApiStaff): Staff => ({
   desig: s.designation ?? "",
   phone: s.phone ?? "",
   email: s.email,
+  pictureUrl: s.pictureUrl ?? null,
 });
 
 export const mapVisitor = (v: ApiVisitor): Visitor => ({
@@ -154,17 +159,21 @@ export const mapVisitor = (v: ApiVisitor): Visitor => ({
   desig: v.designation ?? "",
   email: v.email ?? "",
   phone: v.phone ?? "",
+  pictureUrl: v.pictureUrl ?? null,
   checkedIn: ts(v.checkedInAt),
+  checkedOut: ts(v.checkedOutAt),
 });
 
 const mapAppointment = (a: ApiAppointment): Appointment => ({
   id: a.id,
   visitor: a.visitor?.name ?? "—",
+  visitorId: a.visitor?.id ?? "",
   host: a.host?.name ?? "—",
   start: ts(a.scheduledAt) ?? 0,
   end: ts(a.endsAt) ?? 0,
   status: a.status,
   purpose: a.purpose ?? "",
+  requestedAccessNodeIds: a.requestedAccessNodeIds ?? [],
 });
 
 const mapNode = (n: ApiNode): AccessNode => ({
@@ -200,6 +209,8 @@ export const mapCard = (c: ApiCard, resolveHolder?: HolderResolver): AccessCard 
     type: c.type,
     active: c.isActive,
     holder,
+    holderType: active?.holderType ?? null,
+    holderId: active?.holderId ?? null,
     nodes: active?.accessNodeIds ?? [],
   };
 };

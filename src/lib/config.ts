@@ -12,7 +12,7 @@
 export type DataSource = "mock" | "live";
 
 export const DATA_SOURCE: DataSource =
-  (process.env.NEXT_PUBLIC_DATA_SOURCE as DataSource) || "mock";
+  (process.env.NEXT_PUBLIC_DATA_SOURCE as DataSource) || "live";
 
 /**
  * Base URL of the ISACS API.
@@ -25,9 +25,14 @@ export const DATA_SOURCE: DataSource =
 export const API_BASE_URL =
   process.env.NEXT_PUBLIC_ISACS_API_BASE_URL || "/api";
 
-/** Absolute upstream URL — used by the server-side proxy only. */
+/**
+ * Absolute upstream URL — used by the server-side proxy only. Points at the
+ * Traefik gateway in front of the ISACS backend's services; Traefik itself
+ * does the per-service path routing (see isacs_backend/docker-compose.yml),
+ * so every /api/* resource goes through this single upstream.
+ */
 export const API_UPSTREAM_URL =
-  process.env.ISACS_API_UPSTREAM_URL || "http://192.168.18.6/api";
+  process.env.ISACS_API_UPSTREAM_URL || "http://127.0.0.1/api";
 
 /** Cookie names for the BFF-managed session (httpOnly access/refresh). */
 export const ACCESS_COOKIE = "isacs_at";
