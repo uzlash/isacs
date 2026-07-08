@@ -7,6 +7,7 @@
 //   PUT  /bbiw/filters
 //   GET  /settings/bbiw   → connection config (super_admin)
 //   PUT  /settings/bbiw
+//   POST /bbiw/sync       → push cameras to BBIW (super_admin)
 // ====================================================================
 
 import { api } from "@/lib/api";
@@ -66,6 +67,18 @@ export async function getBbiwConfig(): Promise<Partial<BbiwConfig> | null> {
 
 export async function putBbiwConfig(config: BbiwConfig): Promise<void> {
   await api.put("/settings/bbiw", { value: config });
+}
+
+// ---- camera sync (super_admin) ----
+export interface BbiwSyncResult {
+  synced: number;
+  bbiw?: unknown;
+}
+
+/** Push all local cameras to BBIW's bulk endpoint. Returns the synced count and the server's status message. */
+export async function syncBbiwCameras(): Promise<{ result: BbiwSyncResult; message: string }> {
+  const { data, message } = await api.post<BbiwSyncResult>("/bbiw/sync");
+  return { result: data, message };
 }
 
 // ---- helpers ----

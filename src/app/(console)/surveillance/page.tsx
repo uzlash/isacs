@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Camera as CameraIcon, ExternalLink, Pencil, Plus, Sparkles, SlidersHorizontal, Trash2 } from "lucide-react";
+import { Camera as CameraIcon, ExternalLink, Pencil, Plus, RefreshCw, Sparkles, SlidersHorizontal, Trash2 } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { useSessionUser } from "@/lib/auth";
 import { rel } from "@/lib/format";
@@ -16,6 +16,7 @@ import {
   getBbiwSsoUrl,
   getBbiwFilters,
   putBbiwFilters,
+  syncBbiwCameras,
   BBIW_RULE_TYPES,
   type BbiwFilters,
   type BbiwSeverity,
@@ -29,6 +30,20 @@ const WRITE_ROLES = ["super_admin", "security_manager", "staff_admin"];
 const BBIW_ROLES = ["super_admin", "security_manager"];
 const BBIW_ACCENT = "#a371f7";
 
+// The SSO url is built server-side from the configured BBIW orchestrator host,
+// which may be a docker-internal name (e.g. host.docker.internal) only
+// resolvable from the backend's network — rewrite it to something the user's
+// own browser can actually reach before opening a tab to it.
+function toOpenableUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    if (u.hostname === "host.docker.internal") u.hostname = "127.0.0.1";
+    return u.toString();
+  } catch {
+    return url;
+  }
+}
+
 // Fetch a one-time SSO URL and open the BBIW dashboard in a new tab.
 // The SSO link always lands on the BBIW root and sets the session cookie; for a
 // camera deep-link we can't combine them (the token-login endpoint redirects to
@@ -37,7 +52,7 @@ const BBIW_ACCENT = "#a371f7";
 async function openBbiw(setBusy?: (b: boolean) => void, deepLinkPath?: string) {
   setBusy?.(true);
   try {
-    const url = await getBbiwSsoUrl();
+    const url = toOpenableUrl(await getBbiwSsoUrl());
     const win = window.open(url, "_blank", "noopener");
     if (deepLinkPath) {
       try {
@@ -70,9 +85,23 @@ export default function SurveillancePage() {
   const user = useSessionUser();
   const canWrite = !!user && WRITE_ROLES.includes(user.role);
   const canBbiw = !!user && BBIW_ROLES.includes(user.role);
+  const canSyncBbiw = user?.role === "super_admin";
 
   const [modal, setModal] = useState<Modal | null>(null);
   const [bbiwBusy, setBbiwBusy] = useState(false);
+  const [syncBusy, setSyncBusy] = useState(false);
+
+  const syncBbiw = async () => {
+    setSyncBusy(true);
+    try {
+      const { result, message } = await syncBbiwCameras();
+      alert(message || `Synced ${result.synced} camera(s) to BBIW.`);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Failed to sync cameras to BBIW.");
+    } finally {
+      setSyncBusy(false);
+    }
+  };
 
   const remove = async (c: Camera) => {
     if (!confirm(`Delete camera "${c.name}" (${c.loc})? This removes its feed and snapshot history.`)) return;
@@ -110,6 +139,17 @@ export default function SurveillancePage() {
               <Sparkles size={13} strokeWidth={2.2} /> {bbiwBusy ? "OPENING…" : "OPEN BBIW DASHBOARD"} <ExternalLink size={12} strokeWidth={2.2} />
             </button>
           </>
+        )}
+        {canSyncBbiw && (
+          <button
+            onClick={() => void syncBbiw()}
+            disabled={syncBusy}
+            className="mono"
+            title="Push all cameras to BBIW"
+            style={{ font: "600 10px var(--font-mono-stack)", letterSpacing: ".5px", padding: "7px 12px", display: "flex", alignItems: "center", gap: 6, background: "transparent", border: `1px solid ${BBIW_ACCENT}`, color: BBIW_ACCENT, borderRadius: 7, cursor: syncBusy ? "default" : "pointer", opacity: syncBusy ? 0.6 : 1 }}
+          >
+            <RefreshCw size={13} strokeWidth={2.2} className={syncBusy ? "isacs-spin" : undefined} /> {syncBusy ? "SYNCING…" : "SYNC TO BBIW"}
+          </button>
         )}
         {canWrite && (
           <button onClick={() => setModal({ kind: "create" })} className="btn-accent" style={{ font: "600 10px var(--font-mono-stack)", letterSpacing: ".5px", padding: "7px 12px", display: "flex", alignItems: "center", gap: 6 }}>
