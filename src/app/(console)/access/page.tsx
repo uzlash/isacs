@@ -31,6 +31,7 @@ export default function AccessPage() {
   useStore((s) => s.tick);
   const nodes = useStore((s) => s.nodes);
   const cards = useStore((s) => s.cards);
+  const incidents = useStore((s) => s.incidents);
   const expanded = useStore((s) => s.expanded);
   const selectedNode = useStore((s) => s.selectedNode);
   const checkForm = useStore((s) => s.checkForm);
@@ -51,6 +52,9 @@ export default function AccessPage() {
 
   const nodeName = (id: string) => nodes.find((n) => n.id === id)?.name ?? id;
   const selected = nodes.find((n) => n.id === selectedNode) ?? null;
+  // the ASRS report a lockdown auto-creates carries source "lockdown" and
+  // sourceRef = the lockdown's id — that's who currently has override access.
+  const lockdownReport = active ? incidents.find((i) => i.source === "lockdown" && i.sourceRef === active.id) ?? null : null;
   const openEdit = (n: AccessNode) => {
     setEditNode(n);
     setShowWizard(true);
@@ -94,7 +98,7 @@ export default function AccessPage() {
 
   return (
     <div style={{ maxWidth: 1500, margin: "0 auto", display: "flex", flexDirection: "column", gap: 16 }}>
-      <LockdownPanel active={active} history={history} refresh={refreshLockdown} canWrite={canWrite} nodeName={nodeName} />
+      <LockdownPanel active={active} history={history} refresh={refreshLockdown} canWrite={canWrite} nodeName={nodeName} linkedReport={lockdownReport} />
       <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1.2fr)", gap: 16, alignItems: "start" }}>
       {/* NODE HIERARCHY */}
       <div className="panel" style={{ overflow: "hidden" }}>
@@ -392,6 +396,9 @@ function CheckModal({
                       <span className="mono" style={{ font: "500 9px var(--font-mono-stack)", color: "var(--faint)", width: 34, flex: "0 0 34px" }}>{rel(e.at)}</span>
                       <span className="mono" style={{ font: "600 9px var(--font-mono-stack)", letterSpacing: ".4px", color: tone, width: 130, flex: "0 0 130px" }}>{label}</span>
                       <span style={{ font: "500 10.5px var(--font-sans-stack)", color: "var(--fg)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.node} · {detail}</span>
+                      {e.lockdownOverride && (
+                        <span className="mono" title="Granted via the lockdown personnel exemption" style={{ font: "700 8px var(--font-mono-stack)", letterSpacing: ".4px", color: "var(--warn)", border: "1px solid var(--warn)", borderRadius: 4, padding: "1px 5px", flex: "0 0 auto" }}>OVERRIDE</span>
+                      )}
                     </div>
                   );
                 })}

@@ -144,13 +144,23 @@ export interface Asset {
   geo: boolean;
 }
 
-export type IncidentSource = "access" | "surveillance" | "assets" | "manual";
+export type IncidentSource = "access" | "surveillance" | "assets" | "manual" | "lockdown";
 export type Severity = "critical" | "high" | "medium" | "low";
 export type IncidentStatus = "open" | "investigating" | "resolved";
 
 export interface IncidentLog {
   t: number;
   s: string;
+}
+
+/** A non-lead responder attached to a report's roster (see §2 of the July
+ *  2026 backend update) — grants the same lockdown-access exemption as the
+ *  lead investigator while the report is open. */
+export interface IncidentAssignee {
+  id: string;
+  userId: string;
+  name: string;
+  assignedAt: number;
 }
 
 export interface Incident {
@@ -161,12 +171,19 @@ export interface Incident {
   desc: string;
   node: string;
   investigator: string | null;
+  /** raw investigator user id (null if unassigned) — investigator is the
+   *  display name/email above. */
+  investigatorId: string | null;
   created: number;
   images: number;
   /** attachment URLs — for BBIW surveillance reports imageUrls[0] is an MP4 clip */
   imageUrls: string[];
-  /** the source record ref — for BBIW reports this is the ISACS camera UUID */
+  /** the source record ref — for BBIW reports this is the ISACS camera UUID;
+   *  for lockdown-originated reports this is the lockdown id */
   sourceRef: string | null;
+  /** roster of additional personnel attached to this report (excludes the lead
+   *  investigator) — active (non-unassigned) entries only */
+  assignments: IncidentAssignee[];
   resolution?: string;
   resolvedAt?: number;
   log: IncidentLog[];
@@ -198,6 +215,9 @@ export interface DetectionToast {
   severity: string;
   clipUrl: string | null;
   at: number;
+  /** watchlist match fields (poi_detected / voi_detected only) */
+  match?: string;
+  dangerous?: boolean;
 }
 
 export interface CheckLogEntry {
@@ -210,6 +230,9 @@ export interface CheckLogEntry {
   tries: number;
   maxT: number;
   escalated: boolean;
+  /** granted only because the holder is exempt personnel attached to the
+   *  active lockdown's report — see mutations.ts AccessCheckResult */
+  lockdownOverride?: boolean;
   at: number;
 }
 

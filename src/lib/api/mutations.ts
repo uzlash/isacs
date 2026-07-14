@@ -47,6 +47,30 @@ export async function resolveReport(id: string, resolution: string): Promise<Inc
   return mapReport(data);
 }
 
+// ---- ASRS report roster (§2 of the July 2026 update — everyone besides the
+// lead investigator who is attached to a report; also grants the lockdown
+// access exemption in §1). Permission: asrs:assign (same as /assign above). ----
+export interface ReportAssignment {
+  id: string;
+  reportId: string;
+  userId: string;
+  assignedBy: string;
+  assignedAt: string;
+  unassignedAt: string | null;
+  user?: { id: string; email: string };
+}
+
+export async function addReportAssignee(reportId: string, userId: string): Promise<ReportAssignment> {
+  const { data } = await api.post<ReportAssignment>(`/reports/${reportId}/assignees`, { userId });
+  return data;
+}
+
+/** Soft-removes the roster entry (400/404 if there's no active assignment for that user). */
+export async function removeReportAssignee(reportId: string, userId: string): Promise<ReportAssignment> {
+  const { data } = await api.del<ReportAssignment>(`/reports/${reportId}/assignees/${userId}`);
+  return data;
+}
+
 export interface AccessCheckResult {
   granted: boolean;
   reason?: string;
@@ -55,6 +79,11 @@ export interface AccessCheckResult {
   escalated?: boolean;
   holderType?: string;
   holderId?: string;
+  /** true when granted only via the lockdown-exemption path (§1) — the
+   *  holder is security personnel attached to the active lockdown's report */
+  lockdownOverride?: boolean;
+  /** present on lockdown-affected responses (granted or denied) */
+  lockdownId?: string;
 }
 
 // ---- access control ----

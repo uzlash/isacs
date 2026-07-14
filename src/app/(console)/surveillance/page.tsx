@@ -1,7 +1,21 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Camera as CameraIcon, ExternalLink, Pencil, Plus, RefreshCw, Sparkles, SlidersHorizontal, Trash2 } from "lucide-react";
+import {
+  Camera as CameraIcon,
+  ClipboardList,
+  ExternalLink,
+  ImagePlus,
+  Loader2,
+  Pencil,
+  Plus,
+  RefreshCw,
+  ShieldAlert,
+  Sparkles,
+  SlidersHorizontal,
+  Trash2,
+  X,
+} from "lucide-react";
 import { useStore } from "@/lib/store";
 import { useSessionUser } from "@/lib/auth";
 import { rel } from "@/lib/format";
@@ -17,9 +31,29 @@ import {
   getBbiwFilters,
   putBbiwFilters,
   syncBbiwCameras,
+  getBbiwCameraRules,
+  listPois,
+  addPoi,
+  deletePoi,
+  addPoiPhoto,
+  deletePoiPhoto,
+  poiPhotoUrl,
+  listVois,
+  addVoi,
+  deleteVoi,
+  addVoiPhoto,
+  deleteVoiPhoto,
+  voiPhotoUrl,
   BBIW_RULE_TYPES,
+  VOI_COLORS,
+  VOI_VEHICLE_TYPES,
   type BbiwFilters,
   type BbiwSeverity,
+  type BbiwCameraRule,
+  type PoiEntry,
+  type VoiEntry,
+  type VoiColor,
+  type VoiVehicleType,
 } from "@/lib/api/bbiw";
 import { uploadCameraSnapshot } from "@/lib/api/uploads";
 import CameraFeed from "@/components/CameraFeed";
@@ -76,7 +110,9 @@ type Modal =
   | { kind: "create" }
   | { kind: "edit"; cam: Camera }
   | { kind: "feed"; cam: Camera }
-  | { kind: "bbiwFilters" };
+  | { kind: "bbiwFilters" }
+  | { kind: "bbiwWatchlist" }
+  | { kind: "bbiwRules"; cam: Camera };
 
 export default function SurveillancePage() {
   useStore((s) => s.tick);
@@ -128,6 +164,14 @@ export default function SurveillancePage() {
               style={{ font: "600 10px var(--font-mono-stack)", letterSpacing: ".5px", padding: "7px 12px", display: "flex", alignItems: "center", gap: 6, background: "transparent", border: `1px solid ${BBIW_ACCENT}`, color: BBIW_ACCENT, borderRadius: 7, cursor: "pointer" }}
             >
               <SlidersHorizontal size={13} strokeWidth={2.2} /> DETECTION FILTERS
+            </button>
+            <button
+              onClick={() => setModal({ kind: "bbiwWatchlist" })}
+              className="mono"
+              title="Manage Persons/Vehicles of Interest"
+              style={{ font: "600 10px var(--font-mono-stack)", letterSpacing: ".5px", padding: "7px 12px", display: "flex", alignItems: "center", gap: 6, background: "transparent", border: `1px solid ${BBIW_ACCENT}`, color: BBIW_ACCENT, borderRadius: 7, cursor: "pointer" }}
+            >
+              <ShieldAlert size={13} strokeWidth={2.2} /> WATCHLIST
             </button>
             <button
               onClick={() => void openBbiw(setBbiwBusy)}
@@ -183,18 +227,19 @@ export default function SurveillancePage() {
                     <div style={{ font: "600 11.5px var(--font-sans-stack)", color: "var(--fg)" }}>{c.name}</div>
                     <div className="mono" style={{ font: "500 9.5px var(--font-mono-stack)", color: "var(--faint)", marginTop: 2 }}>{c.loc}</div>
                   </div>
-                  {(canWrite || canBbiw) && (
-                    <div style={{ display: "flex", gap: 5, flexShrink: 0 }}>
-                      {canBbiw && <BbiwCameraButton cameraId={c.id} />}
-                      {canWrite && (
-                        <>
-                          <SnapshotButton cameraId={c.id} />
-                          <IconBtn onClick={() => setModal({ kind: "edit", cam: c })} title="Edit"><Pencil size={12} strokeWidth={1.9} /></IconBtn>
-                          <IconBtn onClick={() => remove(c)} title="Delete" tone="var(--danger)"><Trash2 size={12} strokeWidth={1.9} /></IconBtn>
-                        </>
-                      )}
-                    </div>
-                  )}
+                  <div style={{ display: "flex", gap: 5, flexShrink: 0 }}>
+                    <IconBtn onClick={() => setModal({ kind: "bbiwRules", cam: c })} title="View BBIW detection rules">
+                      <ClipboardList size={12} strokeWidth={1.9} />
+                    </IconBtn>
+                    {canBbiw && <BbiwCameraButton cameraId={c.id} />}
+                    {canWrite && (
+                      <>
+                        <SnapshotButton cameraId={c.id} />
+                        <IconBtn onClick={() => setModal({ kind: "edit", cam: c })} title="Edit"><Pencil size={12} strokeWidth={1.9} /></IconBtn>
+                        <IconBtn onClick={() => remove(c)} title="Delete" tone="var(--danger)"><Trash2 size={12} strokeWidth={1.9} /></IconBtn>
+                      </>
+                    )}
+                  </div>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 10 }}>
                   <span className="mono" style={{ font: "500 9px var(--font-mono-stack)", color: "var(--muted)" }}>snap {rel(c.snap)} ago</span>
@@ -244,6 +289,14 @@ export default function SurveillancePage() {
 
       {modal?.kind === "bbiwFilters" && (
         <BbiwFiltersModal onClose={() => setModal(null)} />
+      )}
+
+      {modal?.kind === "bbiwWatchlist" && (
+        <BbiwWatchlistModal onClose={() => setModal(null)} />
+      )}
+
+      {modal?.kind === "bbiwRules" && (
+        <BbiwRulesModal cam={modal.cam} onClose={() => setModal(null)} />
       )}
 
       {modal?.kind === "feed" && (
@@ -373,11 +426,13 @@ function BbiwFiltersModal({ onClose }: { onClose: () => void }) {
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               {BBIW_RULE_TYPES.map((rule) => {
                 const on = allowed.has(rule);
+                const recommended = rule === "poi_detected" || rule === "voi_detected";
                 return (
                   <button
                     key={rule}
                     onClick={() => toggle(rule)}
                     className="mono"
+                    title={recommended ? "Recommended: keep enabled — watchlist matches are high-value" : undefined}
                     style={{
                       font: "600 10px var(--font-mono-stack)",
                       letterSpacing: ".3px",
@@ -389,14 +444,14 @@ function BbiwFiltersModal({ onClose }: { onClose: () => void }) {
                       color: on ? BBIW_ACCENT : "var(--muted)",
                     }}
                   >
-                    {rule}
+                    {rule}{recommended ? " ★" : ""}
                   </button>
                 );
               })}
             </div>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 7, gap: 10 }}>
               <span className="mono" style={{ font: "500 9px var(--font-mono-stack)", color: "var(--faint)" }}>
-                {allowed.size ? "Only checked rule types forwarded." : "All rule types — none selected = all allowed."}
+                {allowed.size ? "Only checked rule types forwarded. ★ = recommended" : "All rule types — none selected = all allowed."}
               </span>
               {allowed.size > 0 && (
                 <button
@@ -422,6 +477,646 @@ function BbiwFiltersModal({ onClose }: { onClose: () => void }) {
         </>
       )}
     </Shell>
+  );
+}
+
+// ---- BBIW camera rules (read-only "what's being monitored") ----
+function BbiwRulesModal({ cam, onClose }: { cam: Camera; onClose: () => void }) {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [rules, setRules] = useState<BbiwCameraRule[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await getBbiwCameraRules(cam.id);
+        if (!cancelled) setRules(r);
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load camera rules");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [cam.id]);
+
+  return (
+    <Shell title={`BBIW · Rules · ${cam.name}`} onClose={onClose} accent={BBIW_ACCENT}>
+      {loading ? (
+        <Loading text="Loading camera rules…" />
+      ) : error ? (
+        <Err>{error}</Err>
+      ) : rules.length === 0 ? (
+        <Empty text="No detection rules configured for this camera yet. Rule authoring is done in the BBIW dashboard." />
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {rules.map((r) => (
+            <div key={r.id} style={{ border: "1px solid var(--border2)", borderRadius: 9, padding: "10px 12px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span
+                  style={{
+                    width: 7,
+                    height: 7,
+                    borderRadius: "50%",
+                    background: r.enabled ? "var(--ok)" : "var(--faint)",
+                    flexShrink: 0,
+                  }}
+                />
+                <span style={{ font: "600 12px var(--font-sans-stack)", color: "var(--fg)", textTransform: "capitalize" }}>
+                  {r.type.replace(/_/g, " ")}
+                </span>
+                <div style={{ flex: 1 }} />
+                <span className="mono" style={{ font: "500 9px var(--font-mono-stack)", color: "var(--faint)" }}>
+                  cooldown {r.cooldown_s}s
+                </span>
+              </div>
+              {r.config && Object.keys(r.config).length > 0 && (
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
+                  {Object.entries(r.config).map(([k, v]) => (
+                    <RulesChip key={k}>
+                      {k} · {String(v)}
+                    </RulesChip>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </Shell>
+  );
+}
+
+function RulesChip({ children }: { children: React.ReactNode }) {
+  return (
+    <span
+      className="mono"
+      style={{ font: "500 9.5px var(--font-mono-stack)", color: "var(--muted)", background: "var(--panel2)", border: "1px solid var(--border2)", borderRadius: 6, padding: "3px 8px" }}
+    >
+      {children}
+    </span>
+  );
+}
+
+function Loading({ text }: { text: string }) {
+  return (
+    <div style={{ padding: "16px 0", textAlign: "center", color: "var(--faint)", font: "500 12px var(--font-sans-stack)" }}>{text}</div>
+  );
+}
+
+function Empty({ text }: { text: string }) {
+  return (
+    <div style={{ padding: "16px 0", textAlign: "center", color: "var(--faint)", font: "500 12px var(--font-sans-stack)", lineHeight: 1.5 }}>{text}</div>
+  );
+}
+
+// ---- BBIW watchlist — Persons & Vehicles of Interest ----
+function BbiwWatchlistModal({ onClose }: { onClose: () => void }) {
+  const [tab, setTab] = useState<"poi" | "voi">("poi");
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 60, padding: 20 }}>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{ width: 640, maxWidth: "100%", background: "var(--panel)", border: `1px solid ${BBIW_ACCENT}`, borderRadius: 13, boxShadow: "0 24px 60px rgba(0,0,0,.55)", overflow: "hidden", maxHeight: "88vh", display: "flex", flexDirection: "column" }}
+      >
+        <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 14 }}>
+          <span style={{ font: "600 13px var(--font-sans-stack)", color: BBIW_ACCENT }}>BBIW · Watchlist</span>
+          <div style={{ display: "flex", gap: 4 }}>
+            {(["poi", "voi"] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => setTab(t)}
+                className="mono"
+                style={{
+                  font: "600 10px var(--font-mono-stack)",
+                  letterSpacing: ".4px",
+                  padding: "6px 12px",
+                  borderRadius: 7,
+                  cursor: "pointer",
+                  border: tab === t ? `1px solid ${BBIW_ACCENT}` : "1px solid var(--border2)",
+                  background: tab === t ? `color-mix(in srgb, ${BBIW_ACCENT} 15%, transparent)` : "transparent",
+                  color: tab === t ? BBIW_ACCENT : "var(--muted)",
+                }}
+              >
+                {t === "poi" ? "PERSONS" : "VEHICLES"}
+              </button>
+            ))}
+          </div>
+          <div style={{ flex: 1 }} />
+          <button onClick={onClose} style={{ background: "none", border: "none", color: "var(--faint)", fontSize: 18, cursor: "pointer" }}>×</button>
+        </div>
+        <div style={{ padding: 18, overflowY: "auto" }}>{tab === "poi" ? <PoiPanel /> : <VoiPanel />}</div>
+      </div>
+    </div>
+  );
+}
+
+// Adding an entry alone doesn't turn on matching — the camera also needs a
+// poi_detected/voi_detected rule, which is still authored in the BBIW dashboard.
+function WatchlistRuleHint({ label }: { label: string }) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <div className="mono" style={{ flex: 1, font: "500 9.5px var(--font-mono-stack)", color: "var(--faint)", lineHeight: 1.6 }}>
+      Matched automatically once a camera has a &ldquo;{label}&rdquo; rule enabled — set that up in{" "}
+      <button
+        onClick={() => void openBbiw(setBusy)}
+        disabled={busy}
+        className="mono"
+        style={{ background: "none", border: "none", padding: 0, color: BBIW_ACCENT, textDecoration: "underline", cursor: busy ? "default" : "pointer", font: "inherit" }}
+      >
+        {busy ? "opening…" : "the BBIW dashboard"}
+      </button>{" "}
+      (camera → Rules → add &ldquo;{label}&rdquo;).
+    </div>
+  );
+}
+
+function AddToggleButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="mono"
+      style={{ font: "600 10px var(--font-mono-stack)", letterSpacing: ".4px", padding: "6px 11px", borderRadius: 7, cursor: "pointer", border: `1px solid ${BBIW_ACCENT}`, background: "transparent", color: BBIW_ACCENT, display: "flex", alignItems: "center", gap: 5, flexShrink: 0 }}
+    >
+      <Plus size={12} strokeWidth={2.4} /> {label}
+    </button>
+  );
+}
+
+function PoiPanel() {
+  const [items, setItems] = useState<PoiEntry[] | null>(null);
+  const [error, setError] = useState("");
+  const [showAdd, setShowAdd] = useState(false);
+  const [expanded, setExpanded] = useState<string | null>(null);
+
+  const load = async () => {
+    try {
+      setItems(await listPois());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load persons of interest");
+    }
+  };
+  useEffect(() => {
+    (async () => {
+      await load();
+    })();
+  }, []);
+
+  const remove = async (id: string, name: string) => {
+    if (!confirm(`Remove "${name}" from the persons of interest watchlist?`)) return;
+    try {
+      await deletePoi(id);
+      await load();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Failed to remove entry");
+    }
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+        <WatchlistRuleHint label="Person of Interest" />
+        <AddToggleButton label="ADD PERSON" onClick={() => setShowAdd((s) => !s)} />
+      </div>
+
+      {showAdd && (
+        <AddPoiForm
+          onAdded={() => {
+            setShowAdd(false);
+            void load();
+          }}
+          onCancel={() => setShowAdd(false)}
+        />
+      )}
+
+      {error && <Err>{error}</Err>}
+      {items === null && !error && <Loading text="Loading persons of interest…" />}
+      {items && items.length === 0 && <Empty text="No persons of interest yet." />}
+      {items &&
+        items.map((p) => (
+          <WatchlistRow
+            key={p.id}
+            photoUrl={p.photo_count > 0 ? poiPhotoUrl(p.id, 0) : null}
+            title={p.name}
+            badges={p.dangerous ? [{ label: "DANGEROUS", tone: "var(--danger)" }] : []}
+            meta={`${p.photo_count} photo${p.photo_count === 1 ? "" : "s"}`}
+            expanded={expanded === p.id}
+            onToggleExpand={() => setExpanded(expanded === p.id ? null : p.id)}
+            onDelete={() => void remove(p.id, p.name)}
+          >
+            <PhotoManager
+              count={p.photo_count}
+              minKeep={1}
+              photoUrl={(i) => poiPhotoUrl(p.id, i)}
+              onAdd={(file) => addPoiPhoto(p.id, file)}
+              onDelete={(i) => deletePoiPhoto(p.id, i)}
+              onChanged={load}
+            />
+          </WatchlistRow>
+        ))}
+    </div>
+  );
+}
+
+function AddPoiForm({ onAdded, onCancel }: { onAdded: () => void; onCancel: () => void }) {
+  const [name, setName] = useState("");
+  const [dangerous, setDangerous] = useState(false);
+  const [photo, setPhoto] = useState<File | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const submit = async () => {
+    if (!name.trim()) return setError("Name is required.");
+    if (!photo) return setError("A reference photo is required.");
+    setBusy(true);
+    setError("");
+    try {
+      await addPoi({ name: name.trim(), dangerous, photo });
+      onAdded();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to add person");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div style={{ border: "1px solid var(--border2)", borderRadius: 10, padding: 14, display: "flex", flexDirection: "column", gap: 10 }}>
+      <Field label="NAME">
+        <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Jane Smith" autoFocus />
+      </Field>
+      <label style={{ display: "flex", alignItems: "center", gap: 9, cursor: "pointer" }}>
+        <input type="checkbox" checked={dangerous} onChange={(e) => setDangerous(e.target.checked)} style={{ width: 15, height: 15, accentColor: "var(--danger)" }} />
+        <span style={{ font: "500 11.5px var(--font-sans-stack)", color: "var(--fg)" }}>Flag as dangerous</span>
+        <span className="mono" style={{ font: "500 9px var(--font-mono-stack)", color: "var(--faint)" }}>· shown as a red badge on matching alerts</span>
+      </label>
+      <Field label="REFERENCE PHOTO">
+        <PhotoPicker file={photo} onPick={setPhoto} required />
+      </Field>
+      {error && <Err>{error}</Err>}
+      <FormActions busy={busy} onSubmit={submit} onCancel={onCancel} submitLabel="ADD" busyLabel="ADDING…" />
+    </div>
+  );
+}
+
+function VoiPanel() {
+  const [items, setItems] = useState<VoiEntry[] | null>(null);
+  const [error, setError] = useState("");
+  const [showAdd, setShowAdd] = useState(false);
+  const [expanded, setExpanded] = useState<string | null>(null);
+
+  const load = async () => {
+    try {
+      setItems(await listVois());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load vehicles of interest");
+    }
+  };
+  useEffect(() => {
+    (async () => {
+      await load();
+    })();
+  }, []);
+
+  const remove = async (id: string, name: string) => {
+    if (!confirm(`Remove "${name}" from the vehicles of interest watchlist?`)) return;
+    try {
+      await deleteVoi(id);
+      await load();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Failed to remove entry");
+    }
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+        <WatchlistRuleHint label="Vehicle of Interest" />
+        <AddToggleButton label="ADD VEHICLE" onClick={() => setShowAdd((s) => !s)} />
+      </div>
+
+      {showAdd && (
+        <AddVoiForm
+          onAdded={() => {
+            setShowAdd(false);
+            void load();
+          }}
+          onCancel={() => setShowAdd(false)}
+        />
+      )}
+
+      {error && <Err>{error}</Err>}
+      {items === null && !error && <Loading text="Loading vehicles of interest…" />}
+      {items && items.length === 0 && <Empty text="No vehicles of interest yet." />}
+      {items &&
+        items.map((v) => {
+          const badges: { label: string; tone: string }[] = [];
+          if (v.plate_number) badges.push({ label: v.plate_number, tone: "var(--muted)" });
+          if (v.color) badges.push({ label: v.color, tone: "var(--muted)" });
+          if (v.vehicle_type) badges.push({ label: v.vehicle_type, tone: "var(--muted)" });
+          return (
+            <WatchlistRow
+              key={v.id}
+              photoUrl={v.photo_count > 0 ? voiPhotoUrl(v.id, 0) : null}
+              title={v.name}
+              badges={badges}
+              meta={`${v.photo_count} photo${v.photo_count === 1 ? "" : "s"}`}
+              expanded={expanded === v.id}
+              onToggleExpand={() => setExpanded(expanded === v.id ? null : v.id)}
+              onDelete={() => void remove(v.id, v.name)}
+            >
+              <PhotoManager
+                count={v.photo_count}
+                minKeep={0}
+                photoUrl={(i) => voiPhotoUrl(v.id, i)}
+                onAdd={(file) => addVoiPhoto(v.id, file)}
+                onDelete={(i) => deleteVoiPhoto(v.id, i)}
+                onChanged={load}
+              />
+            </WatchlistRow>
+          );
+        })}
+    </div>
+  );
+}
+
+function AddVoiForm({ onAdded, onCancel }: { onAdded: () => void; onCancel: () => void }) {
+  const [name, setName] = useState("");
+  const [plateNumber, setPlateNumber] = useState("");
+  const [color, setColor] = useState<VoiColor | "">("");
+  const [vehicleType, setVehicleType] = useState<VoiVehicleType | "">("");
+  const [photo, setPhoto] = useState<File | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const submit = async () => {
+    if (!name.trim()) return setError("Name is required.");
+    if (!plateNumber.trim() && !color && !vehicleType) {
+      return setError("Set at least a plate number, color, or vehicle type so this entry can be matched.");
+    }
+    setBusy(true);
+    setError("");
+    try {
+      await addVoi({
+        name: name.trim(),
+        plate_number: plateNumber.trim() || undefined,
+        color: color || undefined,
+        vehicle_type: vehicleType || undefined,
+        photo: photo || undefined,
+      });
+      onAdded();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to add vehicle");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div style={{ border: "1px solid var(--border2)", borderRadius: 10, padding: 14, display: "flex", flexDirection: "column", gap: 10 }}>
+      <Field label="NAME">
+        <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder='e.g. "Suspect vehicle #3"' autoFocus />
+      </Field>
+      <Field label="PLATE NUMBER (OPTIONAL)">
+        <input className="input mono" value={plateNumber} onChange={(e) => setPlateNumber(e.target.value)} placeholder="e.g. ABC-123" />
+      </Field>
+      <div style={{ display: "flex", gap: 10 }}>
+        <div style={{ flex: 1 }}>
+          <Field label="COLOR (OPTIONAL)">
+            <select className="input" value={color} onChange={(e) => setColor(e.target.value as VoiColor | "")}>
+              <option value="">—</option>
+              {VOI_COLORS.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </Field>
+        </div>
+        <div style={{ flex: 1 }}>
+          <Field label="VEHICLE TYPE (OPTIONAL)">
+            <select className="input" value={vehicleType} onChange={(e) => setVehicleType(e.target.value as VoiVehicleType | "")}>
+              <option value="">—</option>
+              {VOI_VEHICLE_TYPES.map((t) => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+          </Field>
+        </div>
+      </div>
+      <Field label="REFERENCE PHOTO (OPTIONAL)">
+        <PhotoPicker file={photo} onPick={setPhoto} />
+      </Field>
+      {error && <Err>{error}</Err>}
+      <FormActions busy={busy} onSubmit={submit} onCancel={onCancel} submitLabel="ADD" busyLabel="ADDING…" />
+    </div>
+  );
+}
+
+function FormActions({ busy, onSubmit, onCancel, submitLabel, busyLabel }: { busy: boolean; onSubmit: () => void; onCancel: () => void; submitLabel: string; busyLabel: string }) {
+  return (
+    <div style={{ display: "flex", gap: 8 }}>
+      <button
+        onClick={onSubmit}
+        disabled={busy}
+        className="mono"
+        style={{ flex: 1, height: 36, font: "600 10.5px var(--font-mono-stack)", letterSpacing: ".5px", borderRadius: 8, cursor: busy ? "default" : "pointer", border: `1px solid ${BBIW_ACCENT}`, background: `color-mix(in srgb, ${BBIW_ACCENT} 18%, transparent)`, color: BBIW_ACCENT, opacity: busy ? 0.7 : 1 }}
+      >
+        {busy ? busyLabel : submitLabel}
+      </button>
+      <button
+        onClick={onCancel}
+        disabled={busy}
+        className="mono"
+        style={{ height: 36, padding: "0 14px", font: "600 10.5px var(--font-mono-stack)", borderRadius: 8, cursor: "pointer", border: "1px solid var(--border2)", background: "transparent", color: "var(--muted)" }}
+      >
+        CANCEL
+      </button>
+    </div>
+  );
+}
+
+function PhotoPicker({ file, onPick, required }: { file: File | null; onPick: (f: File | null) => void; required?: boolean }) {
+  const ref = useRef<HTMLInputElement | null>(null);
+  const prevUrl = useRef<string | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+
+  const pick = (f: File | null | undefined) => {
+    if (prevUrl.current) URL.revokeObjectURL(prevUrl.current);
+    const url = f ? URL.createObjectURL(f) : null;
+    prevUrl.current = url;
+    setPreview(url);
+    onPick(f ?? null);
+  };
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <div
+        onClick={() => ref.current?.click()}
+        style={{ width: 52, height: 52, borderRadius: 9, border: "1px dashed var(--border2)", background: "var(--bg)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", cursor: "pointer", flexShrink: 0 }}
+      >
+        {preview ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={preview} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        ) : (
+          <ImagePlus size={17} strokeWidth={1.7} color="var(--faint)" />
+        )}
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+        <button type="button" onClick={() => ref.current?.click()} className="btn" style={{ height: 28, padding: "0 10px", font: "600 9px var(--font-mono-stack)" }}>
+          {file ? "REPLACE" : "CHOOSE FILE"}
+        </button>
+        <span className="mono" style={{ font: "500 8px var(--font-mono-stack)", color: "var(--faint)" }}>
+          JPEG/PNG · max 10MB{required ? "" : " · optional"}
+        </span>
+      </div>
+      <input ref={ref} type="file" accept="image/jpeg,image/png" style={{ display: "none" }} onChange={(e) => pick(e.target.files?.[0])} />
+    </div>
+  );
+}
+
+function WatchlistRow({
+  photoUrl,
+  title,
+  badges,
+  meta,
+  expanded,
+  onToggleExpand,
+  onDelete,
+  children,
+}: {
+  photoUrl: string | null;
+  title: string;
+  badges: { label: string; tone: string }[];
+  meta: React.ReactNode;
+  expanded: boolean;
+  onToggleExpand: () => void;
+  onDelete: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div style={{ border: "1px solid var(--border2)", borderRadius: 10, overflow: "hidden" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px" }}>
+        <div style={{ width: 40, height: 40, borderRadius: 8, overflow: "hidden", background: "var(--bg)", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          {photoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={photoUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          ) : (
+            <ImagePlus size={15} strokeWidth={1.6} color="var(--faint)" />
+          )}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
+            <span style={{ font: "600 12px var(--font-sans-stack)", color: "var(--fg)" }}>{title}</span>
+            {badges.map((b) => (
+              <span
+                key={b.label}
+                className="mono"
+                style={{ font: "700 8px var(--font-mono-stack)", letterSpacing: ".5px", color: b.tone, border: `1px solid ${b.tone}`, borderRadius: 4, padding: "2px 6px", textTransform: "uppercase" }}
+              >
+                {b.label}
+              </span>
+            ))}
+          </div>
+          <div className="mono" style={{ font: "500 9px var(--font-mono-stack)", color: "var(--faint)", marginTop: 2 }}>{meta}</div>
+        </div>
+        <button
+          onClick={onToggleExpand}
+          className="mono"
+          style={{ font: "600 9px var(--font-mono-stack)", letterSpacing: ".4px", color: "var(--muted)", background: "transparent", border: "1px solid var(--border2)", borderRadius: 6, padding: "5px 9px", cursor: "pointer", flexShrink: 0 }}
+        >
+          {expanded ? "HIDE PHOTOS" : "PHOTOS"}
+        </button>
+        <IconBtn onClick={onDelete} title="Remove" tone="var(--danger)"><Trash2 size={12} strokeWidth={1.9} /></IconBtn>
+      </div>
+      {expanded && <div style={{ padding: "0 12px 12px" }}>{children}</div>}
+    </div>
+  );
+}
+
+function PhotoManager({
+  count,
+  minKeep,
+  photoUrl,
+  onAdd,
+  onDelete,
+  onChanged,
+}: {
+  count: number;
+  minKeep: number;
+  photoUrl: (index: number) => string;
+  onAdd: (file: File) => Promise<void>;
+  onDelete: (index: number) => Promise<void>;
+  onChanged: () => Promise<void> | void;
+}) {
+  const ref = useRef<HTMLInputElement | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const addFile = async (file: File | undefined) => {
+    if (!file) return;
+    setBusy(true);
+    setError("");
+    try {
+      await onAdd(file);
+      await onChanged();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to add photo");
+    } finally {
+      setBusy(false);
+      if (ref.current) ref.current.value = "";
+    }
+  };
+
+  const removeAt = async (index: number) => {
+    if (count <= minKeep) return;
+    if (!confirm("Remove this photo?")) return;
+    setBusy(true);
+    setError("");
+    try {
+      await onDelete(index);
+      await onChanged();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to remove photo");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        {Array.from({ length: count }).map((_, i) => (
+          <div key={i} style={{ position: "relative", width: 56, height: 56, borderRadius: 8, overflow: "hidden", border: "1px solid var(--border2)" }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={photoUrl(i)} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            <button
+              onClick={() => void removeAt(i)}
+              disabled={busy || count <= minKeep}
+              title={count <= minKeep ? `Must keep at least ${minKeep} photo` : "Remove photo"}
+              style={{ position: "absolute", top: 2, right: 2, width: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "50%", background: "rgba(0,0,0,.6)", border: "none", color: count <= minKeep ? "rgba(255,255,255,.35)" : "#fff", cursor: count <= minKeep ? "default" : "pointer" }}
+            >
+              <X size={11} strokeWidth={2.4} />
+            </button>
+          </div>
+        ))}
+        <button
+          onClick={() => ref.current?.click()}
+          disabled={busy}
+          title="Add photo"
+          style={{ width: 56, height: 56, borderRadius: 8, border: "1px dashed var(--border2)", background: "var(--bg)", display: "flex", alignItems: "center", justifyContent: "center", cursor: busy ? "default" : "pointer", color: "var(--faint)" }}
+        >
+          {busy ? <Loader2 size={16} className="isacs-spin" /> : <Plus size={16} strokeWidth={2} />}
+        </button>
+      </div>
+      {error && (
+        <div style={{ marginTop: 7 }}>
+          <Err>{error}</Err>
+        </div>
+      )}
+      <input ref={ref} type="file" accept="image/jpeg,image/png" style={{ display: "none" }} onChange={(e) => void addFile(e.target.files?.[0])} />
+    </div>
   );
 }
 

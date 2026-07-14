@@ -252,7 +252,7 @@ export default function NodeInspector({ node, nodes, active, canWrite, refreshLo
             <div style={{ padding: 18, display: "flex", flexDirection: "column", gap: 13 }}>
               <div className="mono" style={{ font: "500 11px var(--font-mono-stack)", color: "var(--muted)", lineHeight: 1.5 }}>
                 {modal === "lock"
-                  ? `Locks the ACM devices at ${node.name}. Only one lockdown can be active facility-wide at a time.`
+                  ? `Sounds the alarm at ${node.name}'s ACM devices — every scan there still gets a real backend decision. Only the lead investigator and roster of the auto-created ASRS report retain access while it's active. Only one lockdown can be active facility-wide at a time.`
                   : "Unlocks all affected ACM devices and auto-resolves the linked ASRS report."}
               </div>
               <div>

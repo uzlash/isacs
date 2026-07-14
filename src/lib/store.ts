@@ -39,11 +39,13 @@ import {
 } from "./api/resources";
 import {
   accessCheck,
+  addReportAssignee,
   assignReport,
   checkInVisitor,
   checkOutVisitor,
   escalateCamera,
   putSetting,
+  removeReportAssignee,
   reportAssetBreach,
   resolveReport,
   setAssetProtocol,
@@ -145,8 +147,12 @@ interface State {
   setIncFilter: (s: string) => void;
   setIncSource: (s: string) => void;
   setResolveText: (s: string) => void;
-  assignIncident: (id: string) => void;
+  /** omit investigatorId to self-assign ("assign to me") */
+  assignIncident: (id: string, investigatorId?: string) => void;
   resolveIncident: (id: string) => void;
+  /** roster (§2) — everyone besides the lead investigator attached to a report */
+  addAssignee: (id: string, userId: string) => void;
+  removeAssignee: (id: string, userId: string) => void;
 
   checkIn: (id: string) => void;
   checkOut: (id: string) => void;
@@ -267,7 +273,7 @@ function handleLiveEvent(e: IsacsEvent, get: () => State, log: LogFn) {
         const clip = imgs.find((u) => isClipUrl(u)) ?? null;
         useStore.setState((s) => ({
           detectionToasts: [
-            { id: uid(), rule: parsed.rule || "detection", camera: parsed.camera || "camera", severity: parsed.severity || "", clipUrl: clip, at: Date.now() },
+            { id: uid(), rule: parsed.rule || "detection", camera: parsed.camera || "camera", severity: parsed.severity || "", clipUrl: clip, at: Date.now(), match: parsed.match, dangerous: parsed.dangerous },
             ...s.detectionToasts,
           ].slice(0, 4),
         }));
@@ -562,15 +568,15 @@ export const useStore = create<State>((set, get) => {
     setIncSource: (incSource) => set({ incSource }),
     setResolveText: (resolveText) => set({ resolveText }),
 
-    assignIncident: async (id) => {
+    assignIncident: async (id, investigatorId) => {
       if (isLive) {
-        const investigatorId = currentUserId();
-        if (!investigatorId) {
+        const targetId = investigatorId ?? currentUserId();
+        if (!targetId) {
           logEvent("ASRS", "Assign failed · no active session", "var(--danger)");
           return;
         }
         try {
-          const updated = await assignReport(id, investigatorId);
+          const updated = await assignReport(id, targetId);
           set((s) => ({ incidents: s.incidents.map((i) => (i.id === id ? updated : i)) }));
           logEvent("ASRS", "Incident " + id + " assigned · investigator notified", "var(--info)");
         } catch (e) {
@@ -578,19 +584,69 @@ export const useStore = create<State>((set, get) => {
         }
         return;
       }
+      const targetId = investigatorId ?? "u3"; // mock "assign to me" — Sgt. D. Park
+      const name = investigatorId ? get().users.find((u) => u.id === investigatorId)?.email ?? "Unknown" : "Sgt. D. Park";
       set((s) => ({
         incidents: s.incidents.map((i) =>
           i.id === id
             ? {
                 ...i,
-                investigator: "Sgt. D. Park",
+                investigator: name,
+                investigatorId: targetId,
                 status: "investigating",
-                log: [...i.log, { t: Date.now(), s: "Assigned to Sgt. D. Park" }],
+                log: [...i.log, { t: Date.now(), s: `Assigned to ${name}` }],
               }
             : i
         ),
       }));
-      logEvent("ASRS", "Incident " + id + " assigned to Sgt. D. Park · investigator notified", "var(--info)");
+      logEvent("ASRS", "Incident " + id + " assigned to " + name + " · investigator notified", "var(--info)");
+    },
+
+    addAssignee: async (id, userId) => {
+      if (isLive) {
+        try {
+          await addReportAssignee(id, userId);
+          await get().refreshReports();
+          logEvent("ASRS", "Personnel added to report " + id + " roster", "var(--info)");
+        } catch (e) {
+          logEvent("ASRS", "Add to roster failed · " + errMsg(e), "var(--danger)");
+        }
+        return;
+      }
+      const u = get().users.find((x) => x.id === userId);
+      if (!u) return;
+      const name = u.staff !== "—" ? u.staff : u.email;
+      set((s) => ({
+        incidents: s.incidents.map((i) =>
+          i.id === id && !i.assignments.some((a) => a.userId === userId)
+            ? {
+                ...i,
+                assignments: [...i.assignments, { id: "asg" + uid(), userId, name, assignedAt: Date.now() }],
+                log: [...i.log, { t: Date.now(), s: `${name} added to roster` }],
+              }
+            : i
+        ),
+      }));
+      logEvent("ASRS", "Personnel added to report " + id + " roster", "var(--info)");
+    },
+
+    removeAssignee: async (id, userId) => {
+      if (isLive) {
+        try {
+          await removeReportAssignee(id, userId);
+          await get().refreshReports();
+          logEvent("ASRS", "Personnel removed from report " + id + " roster", "var(--muted)");
+        } catch (e) {
+          logEvent("ASRS", "Remove from roster failed · " + errMsg(e), "var(--danger)");
+        }
+        return;
+      }
+      set((s) => ({
+        incidents: s.incidents.map((i) =>
+          i.id === id ? { ...i, assignments: i.assignments.filter((a) => a.userId !== userId) } : i
+        ),
+      }));
+      logEvent("ASRS", "Personnel removed from report " + id + " roster", "var(--muted)");
     },
 
     resolveIncident: async (id) => {
@@ -716,11 +772,16 @@ export const useStore = create<State>((set, get) => {
             tries: r.failedTries ?? 0,
             maxT: r.maxTries ?? node.max,
             escalated: !!r.escalated,
+            lockdownOverride: r.lockdownOverride,
             at: Date.now(),
           };
           set((s) => ({ checkLog: [entry, ...s.checkLog].slice(0, 12) }));
           if (r.granted) {
-            logEvent("ACCESS", (holderName || code) + " granted entry · " + node.name, "var(--ok)");
+            logEvent(
+              "ACCESS",
+              (holderName || code) + " granted entry · " + node.name + (r.lockdownOverride ? " · LOCKDOWN OVERRIDE" : ""),
+              "var(--ok)"
+            );
           } else if (r.escalated) {
             logEvent("ACCESS", "DENIED · " + code + " · " + node.name + " (" + entry.tries + "/" + entry.maxT + ") → ESCALATED", "var(--danger)");
             logEvent("ASRS", "Incident auto-created from access failure at " + node.name, "var(--danger)");
@@ -778,10 +839,12 @@ export const useStore = create<State>((set, get) => {
             desc: "Card " + code + " failed access at " + node.name + " " + maxT + " times",
             node: node.name,
             investigator: null,
+            investigatorId: null,
             created: Date.now(),
             images: 0,
             imageUrls: [],
             sourceRef: null,
+            assignments: [],
             log: [{ t: Date.now(), s: "Auto-created by Access Control Engine" }],
           };
           set((s) => ({ incidents: [incident, ...s.incidents] }));
@@ -853,10 +916,12 @@ export const useStore = create<State>((set, get) => {
         desc: a.name + " has left its permitted boundary",
         node: "Perimeter",
         investigator: null,
+        investigatorId: null,
         created: Date.now(),
         images: 0,
         imageUrls: [],
         sourceRef: null,
+        assignments: [],
         log: [{ t: Date.now(), s: "Auto-created by Asset Protocol breach" }],
       };
       set((s) => ({ incidents: [incident, ...s.incidents] }));
@@ -891,10 +956,12 @@ export const useStore = create<State>((set, get) => {
         desc: "Operator escalation from " + cam.name + " · snapshot attached",
         node: cam.loc,
         investigator: null,
+        investigatorId: null,
         created: Date.now(),
         images: 1,
         imageUrls: [],
         sourceRef: null,
+        assignments: [],
         log: [{ t: Date.now(), s: "Escalated from " + cam.name + " (last snapshot attached)" }],
       };
       set((s) => ({ incidents: [incident, ...s.incidents] }));

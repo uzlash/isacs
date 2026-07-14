@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useStore } from "@/lib/store";
+import { useSessionUser } from "@/lib/auth";
 import { assignCard, revokeCard, type HolderType } from "@/lib/api/access";
 import type { CardType } from "@/lib/types";
 import type { AccessCard } from "@/lib/types";
@@ -29,6 +30,8 @@ export default function CardModal(props: Props) {
   const staff = useStore((s) => s.staff);
   const visitors = useStore((s) => s.visitors);
   const assets = useStore((s) => s.assets);
+  const users = useStore((s) => s.users);
+  const sessionUser = useSessionUser();
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -44,12 +47,29 @@ export default function CardModal(props: Props) {
   const [holderId, setHolderId] = useState("");
   const [nodeIds, setNodeIds] = useState<string[]>([]);
 
+  // New authorization rule (frontend_update.md §3): a staff holder whose
+  // linked ISACS account has a security role can only be card-assigned by
+  // certain roles. There's no dedicated "linked role" endpoint — infer it
+  // from the already-loaded users list via its staffId back-link.
+  const roleByStaffId = new Map(users.filter((u) => u.staffId).map((u) => [u.staffId as string, u.role]));
+  const blockedReason = (staffId: string): string | null => {
+    const role = roleByStaffId.get(staffId);
+    if (role === "security_manager" && sessionUser?.role !== "super_admin") {
+      return "Only a super_admin can assign an access card to a security manager.";
+    }
+    if (role === "security_personnel" && !["super_admin", "security_manager"].includes(sessionUser?.role ?? "")) {
+      return "Only a super_admin or security_manager can assign an access card to security personnel.";
+    }
+    return null;
+  };
+
   const holders =
     holderType === "staff"
-      ? staff.map((s) => ({ id: s.id, name: `${s.name} · ${s.staffId}` }))
+      ? staff.map((s) => ({ id: s.id, name: `${s.name} · ${s.staffId}`, restricted: blockedReason(s.id) }))
       : holderType === "visitor"
-        ? visitors.map((v) => ({ id: v.id, name: v.name }))
-        : assets.map((a) => ({ id: a.id, name: a.name }));
+        ? visitors.map((v) => ({ id: v.id, name: v.name, restricted: null as string | null }))
+        : assets.map((a) => ({ id: a.id, name: a.name, restricted: null as string | null }));
+  const selectedHolderBlock = holderType === "staff" && holderId ? blockedReason(holderId) : null;
 
   const submitCreate = async () => {
     if (props.mode !== "create") return;
@@ -75,6 +95,7 @@ export default function CardModal(props: Props) {
     if (props.mode !== "assign") return;
     if (!holderId) return setError("Pick the holder to assign this card to.");
     if (!nodeIds.length) return setError("Select at least one access node to grant.");
+    if (selectedHolderBlock) return setError(selectedHolderBlock);
     setBusy(true);
     setError("");
     try {
@@ -152,12 +173,25 @@ export default function CardModal(props: Props) {
               <Field label="HOLDER">
                 <select className="select" value={holderId} onChange={(e) => setHolderId(e.target.value)}>
                   <option value="">— select {holderType} —</option>
-                  {holders.map((h) => (<option key={h.id} value={h.id}>{h.name}</option>))}
+                  {holders.map((h) => (
+                    <option key={h.id} value={h.id} disabled={!!h.restricted}>
+                      {h.name}{h.restricted ? " (restricted)" : ""}
+                    </option>
+                  ))}
                 </select>
                 {holders.length === 0 && (
                   <div className="mono" style={{ font: "500 9.5px var(--font-mono-stack)", color: "var(--faint)", marginTop: 5 }}>
                     No {holderType} records loaded.
                   </div>
+                )}
+                {holderType === "staff" && holders.some((h) => h.restricted) && (
+                  <div className="mono" style={{ font: "500 9.5px var(--font-mono-stack)", color: "var(--faint)", marginTop: 5, lineHeight: 1.5 }}>
+                    Staff whose account is a security manager or security personnel are greyed out — assigning
+                    them a card is restricted to higher roles.
+                  </div>
+                )}
+                {selectedHolderBlock && (
+                  <div style={{ marginTop: 8 }}><Err>{selectedHolderBlock}</Err></div>
                 )}
               </Field>
               <Field label={`ACCESS NODES (${nodeIds.length})`}>
@@ -188,7 +222,7 @@ export default function CardModal(props: Props) {
                 <button onClick={revoke} disabled={busy} className="mono" style={{ height: 42, padding: "0 16px", font: "600 10.5px var(--font-mono-stack)", letterSpacing: ".4px", borderRadius: 9, cursor: "pointer", background: "transparent", border: "1px solid var(--danger)", color: "var(--danger)", opacity: busy ? 0.7 : 1 }}>
                   REVOKE
                 </button>
-                <button onClick={submitAssign} disabled={busy} className="btn-accent" style={{ flex: 1, height: 42, font: "600 11.5px var(--font-mono-stack)", letterSpacing: ".6px", opacity: busy ? 0.7 : 1 }}>
+                <button onClick={submitAssign} disabled={busy || !!selectedHolderBlock} className="btn-accent" style={{ flex: 1, height: 42, font: "600 11.5px var(--font-mono-stack)", letterSpacing: ".6px", opacity: busy || selectedHolderBlock ? 0.7 : 1 }}>
                   {busy ? "SAVING…" : "ASSIGN CARD"}
                 </button>
               </div>

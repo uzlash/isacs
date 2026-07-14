@@ -121,13 +121,24 @@ export interface ApiAsset {
   } | null;
   AssetTracker?: { trackerSerial: string } | null;
 }
+export interface ApiReportAssignment {
+  id: string;
+  reportId: string;
+  userId: string;
+  assignedBy: string;
+  assignedAt: string;
+  unassignedAt: string | null;
+  user?: { id: string; email: string };
+}
 export interface ApiReport {
   id: string;
-  source: "access-control" | "surveillance" | "assets" | "manual";
+  source: "access-control" | "surveillance" | "assets" | "manual" | "lockdown";
   sourceRef?: string | null;
   description: string;
   status: "open" | "investigating" | "resolved";
   investigatorId?: string | null;
+  /** active (non-unassigned) roster entries besides the lead investigator */
+  assignments?: ApiReportAssignment[];
   imageUrls?: string[];
   resolution?: string | null;
   resolvedAt?: string | null;
@@ -240,17 +251,21 @@ export const mapAsset = (a: ApiAsset): Asset => ({
 });
 
 // Severity isn't in the API — derive a consistent value from the source.
+// A lockdown-originated report is inherently critical: it exists because a
+// facility (or zone) is actively locked down.
 const SEV_BY_SOURCE: Record<ApiReport["source"], Severity> = {
   "access-control": "critical",
   assets: "high",
   surveillance: "medium",
   manual: "low",
+  lockdown: "critical",
 };
 const SOURCE_MAP: Record<ApiReport["source"], IncidentSource> = {
   "access-control": "access",
   surveillance: "surveillance",
   assets: "assets",
   manual: "manual",
+  lockdown: "lockdown",
 };
 
 export const mapReport = (r: ApiReport): Incident => {
@@ -262,6 +277,14 @@ export const mapReport = (r: ApiReport): Incident => {
     log.push({ t: ts(r.updatedAt) ?? created, s: "Assigned to investigator" });
   }
   if (resolvedAt) log.push({ t: resolvedAt, s: "Resolved" });
+  const assignments = (r.assignments ?? [])
+    .filter((a) => a.unassignedAt == null)
+    .map((a) => ({
+      id: a.id,
+      userId: a.userId,
+      name: a.user?.email ?? a.userId,
+      assignedAt: ts(a.assignedAt) ?? created,
+    }));
   return {
     id: r.id,
     source: SOURCE_MAP[r.source] ?? "manual",
@@ -270,10 +293,12 @@ export const mapReport = (r: ApiReport): Incident => {
     desc: r.description,
     node: r.sourceRef ?? "—",
     investigator: r.investigator?.email ?? (r.investigatorId ? "Assigned" : null),
+    investigatorId: r.investigatorId ?? null,
     created,
     images: r.imageUrls?.length ?? 0,
     imageUrls: r.imageUrls ?? [],
     sourceRef: r.sourceRef ?? null,
+    assignments,
     resolution: r.resolution ?? undefined,
     resolvedAt,
     log,

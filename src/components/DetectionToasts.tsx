@@ -33,19 +33,22 @@ export default function DetectionToasts() {
           className="anim-in"
           style={{
             background: "var(--panel)",
-            border: "1px solid #a371f7",
-            borderLeft: "3px solid #a371f7",
+            border: `1px solid ${t.dangerous ? "var(--danger)" : "#a371f7"}`,
+            borderLeft: `3px solid ${t.dangerous ? "var(--danger)" : "#a371f7"}`,
             borderRadius: 11,
             boxShadow: "0 14px 40px rgba(0,0,0,.5)",
             overflow: "hidden",
           }}
         >
           <div style={{ padding: "12px 13px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
               <Sparkles size={13} strokeWidth={2} color="#a371f7" />
               <span className="mono" style={{ font: "600 8.5px var(--font-mono-stack)", letterSpacing: ".6px", color: "#a371f7" }}>BBIW DETECTION</span>
               {t.severity && (
                 <span className="mono" style={{ font: "600 8px var(--font-mono-stack)", textTransform: "uppercase", color: sevTone(t.severity), border: `1px solid ${sevTone(t.severity)}`, borderRadius: 4, padding: "1px 5px" }}>{t.severity}</span>
+              )}
+              {t.dangerous && (
+                <span className="mono" style={{ font: "700 8px var(--font-mono-stack)", letterSpacing: ".5px", color: "#fff", background: "var(--danger)", borderRadius: 4, padding: "1px 6px" }}>⚠ DANGEROUS</span>
               )}
               <div style={{ flex: 1 }} />
               <button onClick={() => dismiss(t.id)} style={{ background: "none", border: "none", color: "var(--faint)", cursor: "pointer", display: "flex" }} aria-label="Dismiss">
@@ -53,7 +56,7 @@ export default function DetectionToasts() {
               </button>
             </div>
             <div style={{ font: "600 13px var(--font-sans-stack)", color: "var(--fg)", marginTop: 7, textTransform: "capitalize" }}>
-              {t.rule.replace(/_/g, " ")}
+              {t.rule.replace(/_/g, " ")}{t.match ? ` · ${t.match}` : ""}
             </div>
             <div className="mono" style={{ font: "500 10px var(--font-mono-stack)", color: "var(--muted)", marginTop: 2 }}>
               {t.camera}

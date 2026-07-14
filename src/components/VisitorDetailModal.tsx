@@ -7,7 +7,7 @@ import type { Pagination } from "@/lib/api";
 import { getVisitor, type ApiVisitorFull } from "@/lib/api/visitors";
 import { listAppointments, type ApiAppointmentDetail } from "@/lib/api/appointments";
 import { getAccessLogs, type AccessLogEntry } from "@/lib/api/access";
-import { statusTone, initials } from "@/lib/format";
+import { statusTone, initials, lockdownReasonTag } from "@/lib/format";
 import { isVisitorOnSite, type Visitor } from "@/lib/types";
 
 type Tab = "profile" | "history" | "scans";
@@ -193,20 +193,26 @@ export default function VisitorDetailModal({ visitor, onClose }: { visitor: Visi
               page={scansPage}
               onPage={setScansPage}
             >
-              {scans.items.map((s) => (
-                <div key={s.id} style={{ display: "grid", gridTemplateColumns: "1fr 1.2fr 90px", gap: 10, padding: "9px 2px", borderBottom: "1px solid var(--border)", alignItems: "center" }}>
-                  <span className="mono" style={{ font: "500 10.5px var(--font-mono-stack)", color: "var(--muted)" }}>{fmtDateTime(s.createdAt)}</span>
-                  <div>
-                    <div style={{ font: "600 12px var(--font-sans-stack)", color: "var(--fg)" }}>{s.node?.name ?? nodeName(s.nodeId)}</div>
-                    <div className="mono" style={{ font: "500 9.5px var(--font-mono-stack)", color: "var(--faint)" }}>
-                      {s.card?.cardNumber ?? "—"}{!s.granted && s.reason ? ` · ${s.reason}` : ""}
+              {scans.items.map((s) => {
+                const lt = lockdownReasonTag(s.reason);
+                return (
+                  <div key={s.id} style={{ display: "grid", gridTemplateColumns: "1fr 1.2fr 90px", gap: 10, padding: "9px 2px", borderBottom: "1px solid var(--border)", alignItems: "center" }}>
+                    <span className="mono" style={{ font: "500 10.5px var(--font-mono-stack)", color: "var(--muted)" }}>{fmtDateTime(s.createdAt)}</span>
+                    <div>
+                      <div style={{ font: "600 12px var(--font-sans-stack)", color: "var(--fg)" }}>{s.node?.name ?? nodeName(s.nodeId)}</div>
+                      <div className="mono" style={{ font: "500 9.5px var(--font-mono-stack)", color: "var(--faint)" }}>
+                        {s.card?.cardNumber ?? "—"}{s.reason && (lt || !s.granted) ? ` · ${s.reason}` : ""}
+                      </div>
                     </div>
+                    <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+                      <span className="pill mono" style={s.granted ? { color: "var(--ok)", border: "1px solid var(--ok)" } : { color: "var(--danger)", border: "1px solid var(--danger)" }}>
+                        {s.granted ? "granted" : "denied"}
+                      </span>
+                      {lt === "override" && <span className="pill mono" style={{ color: "var(--warn)", border: "1px solid var(--warn)" }}>override</span>}
+                    </span>
                   </div>
-                  <span className="pill mono" style={s.granted ? { color: "var(--ok)", border: "1px solid var(--ok)" } : { color: "var(--danger)", border: "1px solid var(--danger)" }}>
-                    {s.granted ? "granted" : "denied"}
-                  </span>
-                </div>
-              ))}
+                );
+              })}
             </PaginatedTable>
           )}
         </div>

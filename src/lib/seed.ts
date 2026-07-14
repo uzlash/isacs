@@ -102,8 +102,8 @@ export const seedAssets = (): Asset[] => [
   { id: "as5", name: "Cargo Forklift", type: "Equipment", vehicle: false, plate: null, tracker: null, protoActive: false, speed: null, geo: false },
 ];
 
-// base rows omit imageUrls/sourceRef; defaults are injected below.
-const seedIncidentRows = (now: number): Omit<Incident, "imageUrls" | "sourceRef">[] => [
+// base rows omit imageUrls/sourceRef/investigatorId/assignments; defaults are injected below.
+const seedIncidentRows = (now: number): Omit<Incident, "imageUrls" | "sourceRef" | "investigatorId" | "assignments">[] => [
   { id: "I-2048", source: "access", sev: "critical", status: "open", desc: "Card QR-VIS-7741 failed access at Server Room 3 times", node: "Server Room", investigator: null, created: now - 3 * MIN, images: 2, log: [{ t: now - 3 * MIN, s: "Auto-created by Access Control Engine" }] },
   { id: "I-2047", source: "assets", sev: "high", status: "investigating", desc: "Supply Truck 2 exceeded geofence boundary — Sector E", node: "Perimeter", investigator: "Cpl. A. Bauer", created: now - 22 * MIN, images: 1, log: [{ t: now - 22 * MIN, s: "Auto-created by Asset Protocol breach" }, { t: now - 18 * MIN, s: "Assigned to Cpl. A. Bauer" }] },
   { id: "I-2046", source: "surveillance", sev: "medium", status: "investigating", desc: "Unidentified individual loitering near Vehicle Bay (CAM-05)", node: "Vehicle Bay", investigator: "Sgt. D. Park", created: now - 54 * MIN, images: 3, log: [{ t: now - 54 * MIN, s: "Escalated from CAM-05 by Lt. M. Vasquez" }, { t: now - 50 * MIN, s: "Assigned to Sgt. D. Park" }] },
@@ -112,8 +112,16 @@ const seedIncidentRows = (now: number): Omit<Incident, "imageUrls" | "sourceRef"
   { id: "I-2043", source: "surveillance", sev: "medium", status: "resolved", desc: "Motion flagged at North Fence after hours (CAM-07)", node: "Perimeter North", investigator: "Sgt. D. Park", created: now - HOUR * 9, images: 2, resolution: "Wildlife confirmed via snapshot review. No action required.", resolvedAt: now - HOUR * 8, log: [{ t: now - HOUR * 9, s: "Escalated from CAM-07" }, { t: now - HOUR * 8, s: "Resolved" }] },
 ];
 
-export const seedIncidents = (now: number): Incident[] =>
-  seedIncidentRows(now).map((r) => ({ ...r, imageUrls: [], sourceRef: null }));
+export const seedIncidents = (now: number): Incident[] => {
+  const idByStaffName = new Map(seedUsers().map((u) => [u.staff, u.id]));
+  return seedIncidentRows(now).map((r) => ({
+    ...r,
+    imageUrls: [],
+    sourceRef: null,
+    investigatorId: (r.investigator && idByStaffName.get(r.investigator)) ?? null,
+    assignments: [],
+  }));
+};
 
 export const seedFeed = (now: number): FeedEvent[] => [
   { id: 1, module: "ACCESS", text: "Sgt. D. Park granted entry · Building A Entrance", tone: "var(--ok)", at: now - 12_000 },

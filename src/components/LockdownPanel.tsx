@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ShieldAlert } from "lucide-react";
 import { rel } from "@/lib/format";
 import { liftLockdown, type Lockdown } from "@/lib/api/lockdown";
+import type { Incident } from "@/lib/types";
 
 // Lockdown STATUS banner + history + lift. Initiation is node-centric now —
 // see NodeInspector ("Lock down this node").
@@ -13,9 +14,13 @@ interface Props {
   refresh: () => Promise<void>;
   canWrite: boolean;
   nodeName: (id: string) => string;
+  /** the ASRS report this lockdown auto-created — its lead investigator +
+   *  roster are exactly who currently bypasses the lockdown (see §1 of
+   *  frontend_update.md). Null while the report hasn't loaded/matched yet. */
+  linkedReport?: Incident | null;
 }
 
-export default function LockdownPanel({ active, history, refresh, canWrite, nodeName }: Props) {
+export default function LockdownPanel({ active, history, refresh, canWrite, nodeName, linkedReport }: Props) {
   const [lifting, setLifting] = useState(false);
   const [resolution, setResolution] = useState("");
   const [busy, setBusy] = useState(false);
@@ -61,6 +66,25 @@ export default function LockdownPanel({ active, history, refresh, canWrite, node
             <Meta label="BY">{active.creator?.email || "—"}</Meta>
             <Meta label="SCOPE">{active.nodeIds === null ? "Entire facility" : active.nodeIds.map(nodeName).join(", ")}</Meta>
           </div>
+          {linkedReport && (
+            <div style={{ marginTop: 12, paddingTop: 11, borderTop: "1px solid color-mix(in srgb, var(--danger) 30%, transparent)" }}>
+              <div className="mono" style={{ font: "600 8.5px var(--font-mono-stack)", letterSpacing: ".6px", color: "var(--danger)", marginBottom: 7 }}>
+                OVERRIDE ACCESS · ONLY THESE {1 + linkedReport.assignments.length} PERSON(S) CAN STILL ENTER LOCKED NODES
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {linkedReport.investigator && (
+                  <span className="mono" style={{ font: "600 9.5px var(--font-mono-stack)", color: "var(--danger)", border: "1px solid var(--danger)", borderRadius: 6, padding: "3px 8px" }}>
+                    {linkedReport.investigator} · LEAD
+                  </span>
+                )}
+                {linkedReport.assignments.map((a) => (
+                  <span key={a.id} className="mono" style={{ font: "600 9.5px var(--font-mono-stack)", color: "var(--muted)", border: "1px solid var(--border2)", borderRadius: 6, padding: "3px 8px" }}>
+                    {a.name}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         <div style={{ padding: "13px 16px", display: "flex", alignItems: "center", gap: 10 }}>

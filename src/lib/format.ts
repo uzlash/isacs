@@ -53,7 +53,19 @@ export const sourceMeta: Record<string, string> = {
   surveillance: "Surveillance",
   assets: "Asset Protocol",
   manual: "Manual Report",
+  lockdown: "Facility Lockdown",
 };
+
+/** Classify an AccessLog `reason` string for the lockdown-exemption model
+ *  (see frontend_update.md §1) — used to badge access-log rows distinctly
+ *  from ordinary grants/denials so reviewers aren't left assuming every
+ *  scan during a lockdown failed. */
+export function lockdownReasonTag(reason: string | null | undefined): "override" | "denied" | null {
+  if (!reason) return null;
+  if (reason.startsWith("Lockdown override")) return "override";
+  if (reason.startsWith("Facility in lockdown")) return "denied";
+  return null;
+}
 
 export const cardTypeTone: Record<string, string> = {
   staff: "var(--accent)",

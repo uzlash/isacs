@@ -3,20 +3,29 @@
 import { useState } from "react";
 import { Plus } from "lucide-react";
 import { useStore } from "@/lib/store";
+import { useSessionUser } from "@/lib/auth";
 import { isLive } from "@/lib/config";
 import { createReport, type CreateReportInput } from "@/lib/api/mutations";
 import { isBbiwReport, isClipUrl, parseBbiwDescription } from "@/lib/api/bbiw";
-import { rel, sourceMeta, statusTone } from "@/lib/format";
+import { rel, roleMeta, sourceMeta, statusTone } from "@/lib/format";
 import { SevPill } from "@/components/ui";
-import type { Incident } from "@/lib/types";
+import type { Incident, User } from "@/lib/types";
 
 const COLS = "78px 90px 1fr 120px 96px 60px";
 const STATUS_FILTERS = ["all", "open", "investigating", "resolved"];
-const SOURCE_FILTERS = ["all", "access", "surveillance", "assets", "manual"];
+const SOURCE_FILTERS = ["all", "access", "surveillance", "assets", "manual", "lockdown"];
+
+// Roles allowed to hand an incident to someone other than themselves —
+// mirrors the "Resolve Incidents" bracket in format.ts's ROLE_MATRIX minus
+// security_personnel, who can self-claim but shouldn't delegate to peers.
+const REASSIGN_ROLES = ["super_admin", "security_manager"];
+// Roles that make sense as an investigator to hand an incident to.
+const INVESTIGATOR_ROLES = ["super_admin", "security_manager", "security_personnel"];
 
 export default function IncidentsPage() {
   useStore((s) => s.tick);
   const incidents = useStore((s) => s.incidents);
+  const users = useStore((s) => s.users);
   const selectedId = useStore((s) => s.selectedIncident);
   const incFilter = useStore((s) => s.incFilter);
   const incSource = useStore((s) => s.incSource);
@@ -26,8 +35,12 @@ export default function IncidentsPage() {
   const setIncSource = useStore((s) => s.setIncSource);
   const setResolveText = useStore((s) => s.setResolveText);
   const assign = useStore((s) => s.assignIncident);
+  const addAssignee = useStore((s) => s.addAssignee);
+  const removeAssignee = useStore((s) => s.removeAssignee);
   const resolve = useStore((s) => s.resolveIncident);
   const refreshReports = useStore((s) => s.refreshReports);
+  const sessionUser = useSessionUser();
+  const canReassign = !!sessionUser && REASSIGN_ROLES.includes(sessionUser.role);
 
   const [showNew, setShowNew] = useState(false);
 
@@ -163,6 +176,7 @@ export default function IncidentsPage() {
               <Meta label="SOURCE" value={sourceMeta[detail.source] || detail.source} />
               <Meta label="LOCATION" value={detail.node} />
               <Meta label="INVESTIGATOR" value={detail.investigator || "Unassigned"} />
+              <Meta label="ROSTER" value={detail.assignments.length ? `+${detail.assignments.length}` : "—"} />
             </div>
           </div>
 
@@ -232,6 +246,47 @@ export default function IncidentsPage() {
             ))}
           </div>
 
+          {(detail.assignments.length > 0 || (canReassign && detail.status !== "resolved")) && (
+            <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--border)" }}>
+              <div className="label" style={{ marginBottom: 9, letterSpacing: ".7px" }}>
+                ROSTER · PERSONNEL ATTACHED BESIDES THE INVESTIGATOR
+              </div>
+              {detail.assignments.length === 0 ? (
+                <div className="mono" style={{ font: "500 10.5px var(--font-mono-stack)", color: "var(--faint)" }}>
+                  Nobody else is attached to this report yet.
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 7, marginBottom: canReassign && detail.status !== "resolved" ? 10 : 0 }}>
+                  {detail.assignments.map((a) => (
+                    <span
+                      key={a.id}
+                      className="mono"
+                      style={{ display: "inline-flex", alignItems: "center", gap: 6, font: "600 10px var(--font-mono-stack)", color: "var(--fg)", background: "var(--panel2)", border: "1px solid var(--border2)", borderRadius: 7, padding: "5px 6px 5px 10px" }}
+                    >
+                      {a.name}
+                      {canReassign && detail.status !== "resolved" && (
+                        <button
+                          onClick={() => removeAssignee(detail.id, a.userId)}
+                          title="Remove from roster"
+                          style={{ background: "none", border: "none", color: "var(--danger)", cursor: "pointer", fontSize: 13, lineHeight: 1, padding: "0 2px" }}
+                        >
+                          ×
+                        </button>
+                      )}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {canReassign && detail.status !== "resolved" && (
+                <RosterAddPicker
+                  users={users}
+                  exclude={[detail.investigatorId, ...detail.assignments.map((a) => a.userId)].filter((x): x is string => !!x)}
+                  onAdd={(userId) => addAssignee(detail.id, userId)}
+                />
+              )}
+            </div>
+          )}
+
           <div style={{ padding: 16 }}>
             {detail.status === "resolved" ? (
               <div style={{ background: "var(--panel2)", border: "1px solid var(--ok)", borderRadius: 8, padding: 12 }}>
@@ -244,23 +299,32 @@ export default function IncidentsPage() {
             ) : (
               <>
                 {detail.status === "open" && (
-                  <div style={{ display: "flex", gap: 9, marginBottom: 11 }}>
-                    <button
-                      onClick={() => assign(detail.id)}
-                      style={{
-                        flex: 1,
-                        height: 38,
-                        borderRadius: 8,
-                        border: "1px solid var(--info)",
-                        background: "transparent",
-                        color: "var(--info)",
-                        font: "600 11px var(--font-mono-stack)",
-                        letterSpacing: ".5px",
-                        cursor: "pointer",
-                      }}
-                    >
-                      ASSIGN TO ME
-                    </button>
+                  <div style={{ marginBottom: 11 }}>
+                    <div style={{ display: "flex", gap: 9 }}>
+                      <button
+                        onClick={() => assign(detail.id)}
+                        style={{
+                          flex: 1,
+                          height: 38,
+                          borderRadius: 8,
+                          border: "1px solid var(--info)",
+                          background: "transparent",
+                          color: "var(--info)",
+                          font: "600 11px var(--font-mono-stack)",
+                          letterSpacing: ".5px",
+                          cursor: "pointer",
+                        }}
+                      >
+                        ASSIGN TO ME
+                      </button>
+                    </div>
+                    {canReassign && (
+                      <AssignToPicker
+                        users={users}
+                        excludeUserId={sessionUser?.id}
+                        onAssign={(investigatorId) => assign(detail.id, investigatorId)}
+                      />
+                    )}
                   </div>
                 )}
                 <textarea
@@ -377,6 +441,116 @@ function NewReportModal({ onClose, onCreated }: { onClose: () => void; onCreated
   );
 }
 
+// Pick a different investigator than yourself — only rendered for roles
+// allowed to delegate (see REASSIGN_ROLES). Options are limited to roles that
+// realistically investigate incidents (see INVESTIGATOR_ROLES) and active accounts.
+function AssignToPicker({
+  users,
+  excludeUserId,
+  onAssign,
+}: {
+  users: User[];
+  excludeUserId?: string;
+  onAssign: (investigatorId: string) => void;
+}) {
+  const [selected, setSelected] = useState("");
+  const options = users.filter(
+    (u) => u.active && u.id !== excludeUserId && INVESTIGATOR_ROLES.includes(u.role)
+  );
+
+  return (
+    <div style={{ display: "flex", gap: 9, marginTop: 8 }}>
+      <select
+        className="input"
+        value={selected}
+        onChange={(e) => setSelected(e.target.value)}
+        style={{ flex: 1, height: 38 }}
+      >
+        <option value="">Assign to someone else…</option>
+        {options.map((u) => (
+          <option key={u.id} value={u.id}>
+            {u.staff !== "—" ? u.staff : u.email} · {roleMeta[u.role].label}
+          </option>
+        ))}
+      </select>
+      <button
+        onClick={() => selected && onAssign(selected)}
+        disabled={!selected}
+        style={{
+          height: 38,
+          padding: "0 14px",
+          borderRadius: 8,
+          border: "1px solid var(--border2)",
+          background: "transparent",
+          color: selected ? "var(--fg)" : "var(--faint)",
+          font: "600 11px var(--font-mono-stack)",
+          letterSpacing: ".5px",
+          cursor: selected ? "pointer" : "default",
+        }}
+      >
+        ASSIGN
+      </button>
+    </div>
+  );
+}
+
+// Add a non-lead responder to a report's roster (§2) — visible only to
+// REASSIGN_ROLES, same gate as picking a different lead investigator.
+function RosterAddPicker({
+  users,
+  exclude,
+  onAdd,
+}: {
+  users: User[];
+  exclude: string[];
+  onAdd: (userId: string) => void;
+}) {
+  const [selected, setSelected] = useState("");
+  const options = users.filter(
+    (u) => u.active && !exclude.includes(u.id) && INVESTIGATOR_ROLES.includes(u.role)
+  );
+
+  return (
+    <div style={{ display: "flex", gap: 9 }}>
+      <select
+        className="input"
+        value={selected}
+        onChange={(e) => setSelected(e.target.value)}
+        style={{ flex: 1, height: 38 }}
+      >
+        <option value="">Add to roster…</option>
+        {options.map((u) => (
+          <option key={u.id} value={u.id}>
+            {u.staff !== "—" ? u.staff : u.email} · {roleMeta[u.role].label}
+          </option>
+        ))}
+      </select>
+      <button
+        onClick={() => {
+          if (selected) {
+            onAdd(selected);
+            setSelected("");
+          }
+        }}
+        disabled={!selected}
+        style={{
+          height: 38,
+          padding: "0 14px",
+          borderRadius: 8,
+          border: "1px solid var(--border2)",
+          background: "transparent",
+          color: selected ? "var(--fg)" : "var(--faint)",
+          font: "600 11px var(--font-mono-stack)",
+          letterSpacing: ".5px",
+          cursor: selected ? "pointer" : "default",
+        }}
+      >
+        ADD
+      </button>
+    </div>
+  );
+}
+
 function Meta({ label, value }: { label: string; value: string }) {
   return (
     <div>
@@ -396,9 +570,21 @@ function BbiwDetection({ detail }: { detail: Incident }) {
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
         <span className="mono" style={{ font: "600 8.5px var(--font-mono-stack)", letterSpacing: ".6px", color: "#a371f7", border: "1px solid #a371f7", borderRadius: 4, padding: "2px 7px" }}>BBIW AI</span>
         <span style={{ font: "600 15px var(--font-sans-stack)", color: "var(--fg)", textTransform: "capitalize" }}>{(p.rule || "detection").replace(/_/g, " ")}</span>
+        {p.dangerous && (
+          <span
+            className="mono"
+            style={{ font: "700 9px var(--font-mono-stack)", letterSpacing: ".6px", color: "#fff", background: "var(--danger)", borderRadius: 4, padding: "3px 8px" }}
+          >
+            ⚠ DANGEROUS
+          </span>
+        )}
         {hasClip && <span className="mono" style={{ font: "600 8px var(--font-mono-stack)", letterSpacing: ".4px", color: "var(--accent)" }}>▶ CLIP AVAILABLE</span>}
       </div>
       <div style={{ display: "flex", gap: 8, marginTop: 9, flexWrap: "wrap" }}>
+        {p.match && <Chip>Match · {p.match}</Chip>}
+        {p.confidence && <Chip>Confidence · {p.confidence}</Chip>}
+        {p.vehicleType && <Chip>Type · {p.vehicleType}</Chip>}
+        {p.signals && <Chip>Signals · {p.signals}</Chip>}
         {p.camera && <Chip>Camera · {p.camera}</Chip>}
         {p.severity && <Chip>Severity · {p.severity}</Chip>}
         {p.node && <Chip>Node · {p.node}</Chip>}
